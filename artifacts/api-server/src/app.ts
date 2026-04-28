@@ -37,6 +37,10 @@ app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+app.get("/ping", (_req, res) => {
+  res.status(200).send("OK");
+});
+
 app.use("/api", router);
 
 export default app;
