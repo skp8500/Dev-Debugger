@@ -170,6 +170,62 @@ function isModelAvailabilityError(err: unknown): boolean {
   return maybeErr.status === 404 || message.includes("does not exist");
 }
 
+function isRateLimitError(err: unknown): boolean {
+  if (!err || typeof err !== "object") {
+    return false;
+  }
+
+  const maybeErr = err as {
+    status?: number;
+    message?: string;
+    error?: { message?: string; code?: string };
+    code?: string;
+  };
+
+  const message = [
+    maybeErr.message,
+    maybeErr.error?.message,
+    maybeErr.error?.code,
+    maybeErr.code,
+  ]
+    .filter((value): value is string => typeof value === "string")
+    .join(" ")
+    .toLowerCase();
+
+  return maybeErr.status === 429 || message.includes("rate limit");
+}
+
+function clampSection(
+  label: string,
+  value: string,
+  maxChars: number,
+): string {
+  if (value.length <= maxChars) {
+    return value;
+  }
+
+  const headChars = Math.floor(maxChars * 0.65);
+  const tailChars = Math.floor(maxChars * 0.25);
+  const omittedChars = value.length - headChars - tailChars;
+
+  return [
+    value.slice(0, headChars),
+    `\n\n[${label.toUpperCase()} TRUNCATED: omitted ${omittedChars} characters to fit model limits]\n\n`,
+    value.slice(-tailChars),
+  ].join("");
+}
+
+function buildBoundedUserPrompt(
+  language: string,
+  error: string,
+  code: string,
+): string {
+  const boundedError = clampSection("error", error, 1_500);
+  const boundedCode = clampSection("code", code, 8_000);
+
+  return buildUserPrompt(language, boundedError, boundedCode);
+}
+
 export async function analyzeCode(
   code: string,
   error: string,
@@ -177,18 +233,19 @@ export async function analyzeCode(
   mode: "standard" | "eli5",
 ): Promise<{ report: DebugReport; tokensUsed: number }> {
   const systemPrompt = buildSystemPrompt(mode);
-  const userPrompt = buildUserPrompt(language, error, code);
+  const userPrompt = buildBoundedUserPrompt(language, error, code);
   const candidateModels = getCandidateModels();
+  const maxCompletionTokens = 1200;
 
   let lastError: Error | null = null;
-  const maxRetries = 3;
+  const maxRetries = 5;
 
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     for (const model of candidateModels) {
       try {
         const response = await openai.chat.completions.create({
           model,
-          max_tokens: 8192,
+          max_tokens: maxCompletionTokens,
           temperature: 0.2,
           response_format: { type: "json_object" },
           messages: [
@@ -209,9 +266,10 @@ export async function analyzeCode(
       } catch (err) {
         lastError = err instanceof Error ? err : new Error(String(err));
         const unavailable = isModelAvailabilityError(err);
+        const rateLimited = isRateLimitError(err);
 
         logger.warn(
-          { attempt, model, err: lastError.message, unavailable },
+          { attempt, model, err: lastError.message, unavailable, rateLimited },
           "AI analysis attempt failed",
         );
 
@@ -220,13 +278,21 @@ export async function analyzeCode(
         }
 
         if (attempt < maxRetries - 1) {
-          const backoffMs = Math.pow(2, attempt) * 500;
+          const backoffMs = rateLimited
+            ? (attempt + 1) * 2_000
+            : Math.pow(2, attempt) * 500;
           await new Promise((resolve) => setTimeout(resolve, backoffMs));
         }
 
         break;
       }
     }
+  }
+
+  if (isRateLimitError(lastError)) {
+    throw new Error(
+      "The AI provider is rate limiting requests right now. Please wait a few seconds and try again.",
+    );
   }
 
   throw lastError ?? new Error("AI analysis failed after all retries");
