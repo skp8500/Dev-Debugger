@@ -21,6 +21,8 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
+const SELECTED_SESSION_STORAGE_KEY = "selectedDebugSessionId";
+
 function getSeverityColor(severity: string) {
   switch (severity) {
     case "syntax_error": return "bg-red-500/10 text-red-500 border-red-500/20";
@@ -86,14 +88,8 @@ export default function History() {
   };
 
   const handleRowClick = (id: string) => {
-    // We navigate back to home, but we'd need to pass the ID. 
-    // Wait, the home page in our implementation doesn't read from URL params, 
-    // but the prompt says: "Clicking a row navigates to / and loads that session."
-    // Let's navigate to home. We can pass it via state or just let the user see recent in sidebar.
-    // Actually, we'll navigate to home and maybe we should have implemented ?session=id in home.
-    // For now we'll just go to home, as instructed.
-    // Let's navigate with the query param so Home can pick it up.
-    setLocation(`/?session=${id}`);
+    window.sessionStorage.setItem(SELECTED_SESSION_STORAGE_KEY, id);
+    setLocation("/");
   };
 
   return (
