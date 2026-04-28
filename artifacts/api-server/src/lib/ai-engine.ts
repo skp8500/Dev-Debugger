@@ -141,6 +141,48 @@ function validateDebugReport(parsed: unknown): DebugReport {
   };
 }
 
+function getCandidateModels(): string[] {
+  const configured = process.env["AI_INTEGRATIONS_OPENAI_MODEL"];
+  if (configured) {
+    return configured
+      .split(",")
+      .map((model) => model.trim())
+      .filter(Boolean);
+  }
+
+  const baseUrl = process.env["AI_INTEGRATIONS_OPENAI_BASE_URL"] ?? "";
+  if (baseUrl.includes("generativelanguage.googleapis.com")) {
+    return ["gemini-2.5-flash", "gemini-2.0-flash"];
+  }
+
+  return ["gpt-4o-mini"];
+}
+
+function isModelAvailabilityError(err: unknown): boolean {
+  if (!err || typeof err !== "object") {
+    return false;
+  }
+
+  const maybeErr = err as {
+    status?: number;
+    message?: string;
+    error?: { message?: string; code?: string };
+    code?: string;
+  };
+
+  const message = [
+    maybeErr.message,
+    maybeErr.error?.message,
+    maybeErr.error?.code,
+    maybeErr.code,
+  ]
+    .filter((value): value is string => typeof value === "string")
+    .join(" ")
+    .toLowerCase();
+
+  return maybeErr.status === 404 || message.includes("does not exist");
+}
+
 export async function analyzeCode(
   code: string,
   error: string,
@@ -149,42 +191,53 @@ export async function analyzeCode(
 ): Promise<{ report: DebugReport; tokensUsed: number }> {
   const systemPrompt = buildSystemPrompt(mode);
   const userPrompt = buildUserPrompt(language, error, code);
+  const candidateModels = getCandidateModels();
 
   let lastError: Error | null = null;
   const maxRetries = 3;
 
   for (let attempt = 0; attempt < maxRetries; attempt++) {
-    try {
-      const response = await openai.chat.completions.create({
-        model: "gemini-2.5-flash",
-        max_tokens: 8192,
-        temperature: 0.2,
-        response_format: { type: "json_object" },
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-      });
+    for (const model of candidateModels) {
+      try {
+        const response = await openai.chat.completions.create({
+          model,
+          max_tokens: 8192,
+          temperature: 0.2,
+          response_format: { type: "json_object" },
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt },
+          ],
+        });
 
-      const content = response.choices[0]?.message?.content;
-      if (!content) {
-        throw new Error("Empty response from AI");
-      }
+        const content = response.choices[0]?.message?.content;
+        if (!content) {
+          throw new Error("Empty response from AI");
+        }
 
-      const report = parseDebugReport(content);
-      const tokensUsed = response.usage?.total_tokens ?? 0;
+        const report = parseDebugReport(content);
+        const tokensUsed = response.usage?.total_tokens ?? 0;
 
-      return { report, tokensUsed };
-    } catch (err) {
-      lastError = err instanceof Error ? err : new Error(String(err));
-      logger.warn(
-        { attempt, err: lastError.message },
-        "AI analysis attempt failed",
-      );
+        return { report, tokensUsed };
+      } catch (err) {
+        lastError = err instanceof Error ? err : new Error(String(err));
+        const unavailable = isModelAvailabilityError(err);
 
-      if (attempt < maxRetries - 1) {
-        const backoffMs = Math.pow(2, attempt) * 500;
-        await new Promise((resolve) => setTimeout(resolve, backoffMs));
+        logger.warn(
+          { attempt, model, err: lastError.message, unavailable },
+          "AI analysis attempt failed",
+        );
+
+        if (unavailable) {
+          continue;
+        }
+
+        if (attempt < maxRetries - 1) {
+          const backoffMs = Math.pow(2, attempt) * 500;
+          await new Promise((resolve) => setTimeout(resolve, backoffMs));
+        }
+
+        break;
       }
     }
   }
