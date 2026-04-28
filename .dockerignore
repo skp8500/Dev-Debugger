@@ -1,0 +1,38 @@
+# Docker
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Dependencies (rebuilt inside the image)
+node_modules
+
+# IDE / editor
+.vscode
+.idea
+*.sublime-*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Build artifacts (rebuilt inside the image)
+artifacts/*/dist
+lib/*/dist
+
+# Misc
+.cache
+.local
+.replit
+.replitignore
+replit.md
+attached_assets

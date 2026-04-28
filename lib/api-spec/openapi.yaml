@@ -1,0 +1,564 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: Smart Dev Debugger API specification
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: auth
+    description: Authentication operations
+  - name: debug
+    description: AI debug analysis
+  - name: history
+    description: Debug session history
+
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  /auth/register:
+    post:
+      operationId: registerUser
+      tags: [auth]
+      summary: Register a new user
+      description: Creates a user with email/password credentials and issues a session cookie
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+      responses:
+        "201":
+          description: Registered and signed in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicUser"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: Email already in use
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /auth/login:
+    post:
+      operationId: loginUser
+      tags: [auth]
+      summary: Sign in with email and password
+      description: Verifies credentials and issues a session cookie
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Signed in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicUser"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /auth/logout:
+    post:
+      operationId: logoutUser
+      tags: [auth]
+      summary: Sign out
+      description: Clears the session cookie
+      responses:
+        "200":
+          description: Signed out
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                required:
+                  - success
+
+  /auth/me:
+    get:
+      operationId: getCurrentUser
+      tags: [auth]
+      summary: Get the currently authenticated user
+      description: Returns the user record for the current session, or 401 if no valid session
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicUser"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /v1/analyze:
+    post:
+      operationId: analyzeCode
+      tags: [debug]
+      summary: Analyze broken code and error
+      description: Submit code and error for AI-powered debug analysis
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnalyzeRequest"
+      responses:
+        "200":
+          description: Debug analysis result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DebugSession"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "402":
+          description: Out of credits
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "429":
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "503":
+          description: Server or AI error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /v1/history:
+    get:
+      operationId: listHistory
+      tags: [history]
+      summary: List debug session history
+      description: Returns paginated list of past debug sessions for the current user
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+            minimum: 1
+            maximum: 50
+        - name: language
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Paginated history
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HistoryResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+    delete:
+      operationId: clearHistory
+      tags: [history]
+      summary: Clear all history for the current user
+      description: Deletes all debug sessions belonging to the current user
+      responses:
+        "200":
+          description: History cleared
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deleted:
+                    type: integer
+                required:
+                  - deleted
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /v1/history/{sessionId}:
+    get:
+      operationId: getSession
+      tags: [history]
+      summary: Get a specific debug session
+      description: Returns the full debug session by ID
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Full debug session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DebugSession"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Session not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+    delete:
+      operationId: deleteSession
+      tags: [history]
+      summary: Delete a debug session
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Session deleted
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Session not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /v1/stats:
+    get:
+      operationId: getStats
+      tags: [debug]
+      summary: Get usage statistics
+      description: Returns aggregate stats for the current user
+      responses:
+        "200":
+          description: Stats summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatsResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+        db:
+          type: string
+      required:
+        - status
+
+    RegisterRequest:
+      type: object
+      properties:
+        fullName:
+          type: string
+          minLength: 1
+          maxLength: 100
+        email:
+          type: string
+          format: email
+          maxLength: 255
+        password:
+          type: string
+          minLength: 8
+          maxLength: 255
+      required:
+        - fullName
+        - email
+        - password
+
+    LoginRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 1
+      required:
+        - email
+        - password
+
+    PublicUser:
+      type: object
+      properties:
+        id:
+          type: string
+        fullName:
+          type: string
+        email:
+          type: string
+        avatarUrl:
+          type: ["string", "null"]
+        credits:
+          type: integer
+        authMethod:
+          type: string
+          enum:
+            - google
+            - email
+        createdAt:
+          type: string
+      required:
+        - id
+        - fullName
+        - email
+        - avatarUrl
+        - credits
+        - authMethod
+        - createdAt
+
+    AnalyzeRequest:
+      type: object
+      properties:
+        code:
+          type: string
+          maxLength: 10000
+          description: The broken code to analyze
+        error:
+          type: string
+          maxLength: 5000
+          description: The error message or stack trace
+        language:
+          type: string
+          enum:
+            - python
+            - javascript
+            - typescript
+            - cpp
+            - java
+            - go
+            - rust
+            - php
+            - ruby
+            - csharp
+        mode:
+          type: string
+          enum:
+            - standard
+            - eli5
+          default: standard
+      required:
+        - code
+        - error
+        - language
+
+    DebugSession:
+      type: object
+      properties:
+        id:
+          type: string
+        rootCause:
+          type: string
+        fix:
+          type: string
+        explanation:
+          type: string
+        correctedCode:
+          type: string
+        proTip:
+          type: string
+        language:
+          type: string
+        severity:
+          type: string
+          enum:
+            - syntax_error
+            - runtime_error
+            - logic_error
+            - warning
+        tokensUsed:
+          type: ["integer", "null"]
+        cached:
+          type: boolean
+        durationMs:
+          type: ["integer", "null"]
+        createdAt:
+          type: string
+        rawCode:
+          type: ["string", "null"]
+        rawError:
+          type: ["string", "null"]
+        mode:
+          type: string
+        creditsRemaining:
+          type: ["integer", "null"]
+      required:
+        - id
+        - rootCause
+        - fix
+        - explanation
+        - correctedCode
+        - proTip
+        - language
+        - severity
+        - cached
+        - createdAt
+
+    ApiError:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+          required:
+            - code
+            - message
+      required:
+        - error
+
+    HistoryResponse:
+      type: object
+      properties:
+        sessions:
+          type: array
+          items:
+            $ref: "#/components/schemas/DebugSession"
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+        hasNext:
+          type: boolean
+      required:
+        - sessions
+        - total
+        - page
+        - limit
+        - hasNext
+
+    LanguageStat:
+      type: object
+      properties:
+        language:
+          type: string
+        count:
+          type: integer
+      required:
+        - language
+        - count
+
+    SeverityStat:
+      type: object
+      properties:
+        severity:
+          type: string
+        count:
+          type: integer
+      required:
+        - severity
+        - count
+
+    StatsResponse:
+      type: object
+      properties:
+        totalSessions:
+          type: integer
+        cachedResponses:
+          type: integer
+        byLanguage:
+          type: array
+          items:
+            $ref: "#/components/schemas/LanguageStat"
+        bySeverity:
+          type: array
+          items:
+            $ref: "#/components/schemas/SeverityStat"
+        avgTokensUsed:
+          type: ["number", "null"]
+        avgDurationMs:
+          type: ["number", "null"]
+      required:
+        - totalSessions
+        - cachedResponses
+        - byLanguage
+        - bySeverity
