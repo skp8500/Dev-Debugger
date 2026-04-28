@@ -9,7 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { Play, Copy, CheckCircle2, History, AlertCircle, Download, Wand2, Lightbulb, ChevronRight, ChevronDown, Terminal } from "lucide-react";
+import { Play, Copy, CheckCircle2, History, AlertCircle, Download, Wand2, Lightbulb, ChevronRight, ChevronDown, Terminal, SquarePen } from "lucide-react";
 import { AnalyzeRequestLanguage, AnalyzeRequestMode, DebugSessionSeverity } from "@workspace/api-client-react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/contexts/auth-context";
@@ -137,6 +137,14 @@ export default function Home() {
     }
   }, [sessionData]);
 
+  const handleNewChat = () => {
+    setCode("");
+    setErrorText("");
+    setActiveSessionId(null);
+    setProTipOpen(false);
+    analyzeMutation.reset();
+  };
+
   const handleAnalyze = () => {
     if (!code || !errorText) return;
     if (outOfCredits) {
@@ -184,13 +192,19 @@ export default function Home() {
       <OutOfCreditsModal open={showOutOfCredits} onOpenChange={setShowOutOfCredits} />
       {/* Sidebar History */}
       <div className="w-64 hidden lg:flex flex-col border-r bg-muted/30">
-        <div className="p-4 border-b flex items-center justify-between">
-          <h2 className="font-semibold text-sm flex items-center gap-2">
-            <History className="w-4 h-4" /> Recent
-          </h2>
-          <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => setLocation("/history")}>
-            View all
+        <div className="p-4 border-b space-y-3">
+          <Button variant="outline" className="w-full justify-start" onClick={handleNewChat}>
+            <SquarePen className="w-4 h-4" />
+            New Chat
           </Button>
+          <div className="flex items-center justify-between">
+            <h2 className="font-semibold text-sm flex items-center gap-2">
+              <History className="w-4 h-4" /> Recent
+            </h2>
+            <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => setLocation("/history")}>
+              View all
+            </Button>
+          </div>
         </div>
         <div className="flex-1 overflow-y-auto p-2 space-y-2">
           {historyData?.sessions?.map((session) => (
