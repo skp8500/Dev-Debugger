@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://dev-debugger.onrender.com/api/:path*"
+    }
+  ]
+}
