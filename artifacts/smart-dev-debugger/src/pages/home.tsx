@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { useAnalyzeCode, useListHistory, useGetSession, ApiError } from "@workspace/api-client-react";
+import { useAnalyzeCode, useListHistory, useGetSession, ApiError, getListHistoryQueryKey, getGetStatsQueryKey } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -15,6 +16,9 @@ import { useLocation } from "wouter";
 import { useAuth } from "@/contexts/auth-context";
 import { OutOfCreditsModal } from "@/components/credits-modal";
 import { getRandomSampleError } from "@/lib/sample-errors";
+
+const SELECTED_SESSION_STORAGE_KEY = "selectedDebugSessionId";
+const OPTIMISTIC_SESSION_ID_PREFIX = "optimistic-debug-session-";
 
 function getSeverityColor(severity: string) {
   switch (severity) {
@@ -93,7 +97,8 @@ function getAnalysisErrorMessage(error: unknown): string {
 }
 
 export default function Home() {
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
+  const queryClient = useQueryClient();
   const { user, setUser } = useAuth();
   const [code, setCode] = useState("");
   const [errorText, setErrorText] = useState("");
@@ -103,6 +108,56 @@ export default function Home() {
   const [copied, setCopied] = useState(false);
   const [proTipOpen, setProTipOpen] = useState(false);
   const [showOutOfCredits, setShowOutOfCredits] = useState(false);
+  const [sampleLoadMessage, setSampleLoadMessage] = useState<string | null>(null);
+  const [lastSampleKey, setLastSampleKey] = useState<string | null>(null);
+  const [pendingHistorySessionId, setPendingHistorySessionId] = useState<string | null>(null);
+
+  const removeOptimisticSessionFromCache = (sessionId: string) => {
+    queryClient.setQueriesData({ queryKey: getListHistoryQueryKey() }, (current) => {
+      if (!current || typeof current !== "object" || !("sessions" in current) || !Array.isArray(current.sessions)) {
+        return current;
+      }
+
+      const nextSessions = current.sessions.filter((session: { id: string }) => session.id !== sessionId);
+      const nextTotal = typeof current.total === "number"
+        ? Math.max(0, current.total - (nextSessions.length === current.sessions.length ? 0 : 1))
+        : current.total;
+
+      return {
+        ...current,
+        sessions: nextSessions,
+        total: nextTotal,
+      };
+    });
+  };
+
+  const addOptimisticSessionToCache = (sessionId: string) => {
+    const optimisticSession = {
+      id: sessionId,
+      language,
+      severity: DebugSessionSeverity.runtime_error,
+      rootCause: errorText.split("\n")[0] || "Debugging in progress...",
+      createdAt: new Date().toISOString(),
+      rawCode: code,
+      rawError: errorText,
+      mode,
+    };
+
+    queryClient.setQueriesData({ queryKey: getListHistoryQueryKey() }, (current) => {
+      if (!current || typeof current !== "object" || !("sessions" in current) || !Array.isArray(current.sessions)) {
+        return current;
+      }
+
+      const filteredSessions = current.sessions.filter((session: { id: string }) => session.id !== sessionId);
+      const nextLimit = typeof current.limit === "number" ? current.limit : filteredSessions.length + 1;
+
+      return {
+        ...current,
+        sessions: [optimisticSession, ...filteredSessions].slice(0, nextLimit),
+        total: typeof current.total === "number" ? current.total + 1 : current.total,
+      };
+    });
+  };
 
   const analyzeMutation = useAnalyzeCode({
     mutation: {
@@ -111,8 +166,21 @@ export default function Home() {
         if (typeof remaining === "number" && user) {
           setUser({ ...user, credits: remaining });
         }
+
+        if (pendingHistorySessionId) {
+          removeOptimisticSessionFromCache(pendingHistorySessionId);
+          setPendingHistorySessionId(null);
+        }
+
+        queryClient.invalidateQueries({ queryKey: getListHistoryQueryKey() });
+        queryClient.invalidateQueries({ queryKey: getGetStatsQueryKey() });
       },
       onError: (err) => {
+        if (pendingHistorySessionId) {
+          removeOptimisticSessionFromCache(pendingHistorySessionId);
+          setPendingHistorySessionId(null);
+        }
+
         if (err instanceof ApiError && err.status === 402) {
           setShowOutOfCredits(true);
           if (user && user.credits > 0) setUser({ ...user, credits: 0 });
@@ -123,9 +191,33 @@ export default function Home() {
   const { data: historyData } = useListHistory({ limit: 10 });
   const { data: sessionData, isFetching: isSessionFetching } = useGetSession(activeSessionId || "", { query: { enabled: !!activeSessionId } });
 
-  const activeResult = sessionData || analyzeMutation.data;
+  const activeResult = analyzeMutation.data ?? sessionData;
   const isAnalyzing = analyzeMutation.isPending || isSessionFetching;
   const outOfCredits = (user?.credits ?? 0) <= 0;
+
+  useEffect(() => {
+    const sessionIdFromQuery = new URLSearchParams(window.location.search).get("session");
+    const sessionIdFromStorage = window.sessionStorage.getItem(SELECTED_SESSION_STORAGE_KEY);
+    const sessionId = sessionIdFromQuery || sessionIdFromStorage;
+
+    if (sessionId && sessionId !== activeSessionId) {
+      setActiveSessionId(sessionId);
+      setSampleLoadMessage(null);
+      analyzeMutation.reset();
+      setProTipOpen(false);
+      if (sessionIdFromStorage) {
+        window.sessionStorage.removeItem(SELECTED_SESSION_STORAGE_KEY);
+      }
+    }
+  }, [location]);
+
+  const handleOpenSession = (sessionId: string) => {
+    setActiveSessionId(sessionId);
+    setLastSampleKey(null);
+    setSampleLoadMessage(null);
+    setProTipOpen(false);
+    analyzeMutation.reset();
+  };
 
   // Sync state when session data loads
   useEffect(() => {
@@ -138,31 +230,59 @@ export default function Home() {
   }, [sessionData]);
 
   const handleNewChat = () => {
+    window.sessionStorage.removeItem(SELECTED_SESSION_STORAGE_KEY);
+    setLocation("/");
     setCode("");
     setErrorText("");
     setActiveSessionId(null);
+    setLastSampleKey(null);
+    setSampleLoadMessage(null);
     setProTipOpen(false);
     analyzeMutation.reset();
   };
 
-  const handleAnalyze = () => {
+  const handleAnalyze = (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
     if (!code || !errorText) return;
     if (outOfCredits) {
       setShowOutOfCredits(true);
       return;
     }
-    setActiveSessionId(null);
+    console.log("Debug triggered");
+    console.log("Session ID:", activeSessionId);
+    setLastSampleKey(null);
+    setSampleLoadMessage(null);
+    const optimisticSessionId = `${OPTIMISTIC_SESSION_ID_PREFIX}${Date.now()}`;
+    setPendingHistorySessionId(optimisticSessionId);
+    addOptimisticSessionToCache(optimisticSessionId);
     analyzeMutation.mutate({ data: { code, error: errorText, language, mode } });
   };
 
-  const handleLoadSample = () => {
-    const sample = getRandomSampleError(language);
-    if (!sample) return;
-
-    setCode(sample.code);
-    setErrorText(sample.error);
+  const handleLoadSample = (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    window.sessionStorage.removeItem(SELECTED_SESSION_STORAGE_KEY);
     setActiveSessionId(null);
+    setSampleLoadMessage(null);
+    setProTipOpen(false);
     analyzeMutation.reset();
+
+    console.log("Clicked Load Sample");
+    console.log("Selected Language:", language);
+
+    const sample = getRandomSampleError(language, lastSampleKey ?? undefined);
+    if (!sample) {
+      setSampleLoadMessage(`No sample errors available for ${getLanguageLabel(language)}.`);
+      console.warn("No sample errors available for language:", language);
+      return;
+    }
+
+    const nextSampleKey = `${sample.code}:::${sample.error}`;
+    console.log("Pool Type:", sample.poolType === "complex" ? "Complex" : "Simple");
+    console.log("Selected Index:", sample.index);
+
+    setCode(() => `${sample.code}`);
+    setErrorText(() => `${sample.error}`);
+    setLastSampleKey(nextSampleKey);
   };
 
   const handleCopyCode = () => {
@@ -210,7 +330,7 @@ export default function Home() {
           {historyData?.sessions?.map((session) => (
             <button
               key={session.id}
-              onClick={() => setActiveSessionId(session.id)}
+              onClick={() => handleOpenSession(session.id)}
               className={`w-full text-left p-3 rounded-md text-sm transition-colors border ${activeSessionId === session.id ? 'bg-primary/10 border-primary/20' : 'bg-card hover:bg-muted border-border/50'}`}
             >
               <div className="flex justify-between items-center mb-1">
@@ -232,11 +352,20 @@ export default function Home() {
       <div className="flex-1 flex flex-col border-r w-full max-w-[50%] bg-background">
         <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6">
           <div className="flex items-center justify-between">
-            <h1 className="text-xl font-bold tracking-tight">New Debug Session</h1>
-            <Button variant="outline" size="sm" onClick={handleLoadSample}>
+            <h1 className="text-xl font-bold tracking-tight">
+              {activeSessionId ? "Resume Debug Session" : "New Debug Session"}
+            </h1>
+            <Button type="button" variant="outline" size="sm" onClick={handleLoadSample}>
               Load Sample Error
             </Button>
           </div>
+
+          {sampleLoadMessage && (
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{sampleLoadMessage}</AlertDescription>
+            </Alert>
+          )}
 
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
@@ -312,6 +441,7 @@ export default function Home() {
 
         <div className="p-4 border-t bg-background/95 backdrop-blur">
           <Button
+            type="button"
             className="w-full font-semibold"
             size="lg"
             onClick={handleAnalyze}

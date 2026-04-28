@@ -5,6 +5,11 @@ export interface SampleError {
   error: string;
 }
 
+export interface SampleErrorSelection extends SampleError {
+  index: number;
+  poolType: "basic" | "complex";
+}
+
 export const SAMPLE_ERRORS_BY_LANGUAGE: Record<AnalyzeRequestLanguage, SampleError[]> = {
   python: [
     {
@@ -508,11 +513,163 @@ export const SAMPLE_ERRORS_BY_LANGUAGE: Record<AnalyzeRequestLanguage, SampleErr
   ],
 };
 
-export function getRandomSampleError(language: AnalyzeRequestLanguage): SampleError | null {
-  const samples = SAMPLE_ERRORS_BY_LANGUAGE[language];
-  if (!samples || samples.length === 0) {
+export interface SampleErrorPools {
+  basic: SampleError[];
+  complex: SampleError[];
+}
+
+export const COMPLEX_SAMPLE_ERRORS_BY_LANGUAGE: Record<AnalyzeRequestLanguage, SampleError[]> = {
+  python: [
+    {
+      code: "from services.email_service import send_welcome_email   # imports from services\n\nclass User:\n    def __init__(self, name: str, email: str):\n        self.name = name\n        self.email = email\n\n    def save(self):\n        # Save user to DB (simulated)\n        send_welcome_email(self)\n        return self\n\nfrom models.user import User   # imports from models — CIRCULAR!\n\ndef send_welcome_email(user: User):\n    print(f\"Sending email to {user.email}\")\n\ndef get_all_users():\n    return User.query.all()\n\nfrom models.user import User\n\nif __name__ == \"__main__\":\n    u = User(\"Alice\", \"alice@example.com\")\n    u.save()",
+      error: "Traceback (most recent call last):\n  File \"/app/app.py\", line 1, in <module>\n    from models.user import User\n  File \"/app/models/user.py\", line 1, in <module>\n    from services.email_service import send_welcome_email\n  File \"/app/services/email_service.py\", line 1, in <module>\n    from models.user import User\nImportError: cannot import name 'User' from partially initialized module\n'models.user' (most likely due to a circular import)",
+    },
+    {
+      code: "from celery import shared_task\nfrom datetime import datetime\nfrom decimal import Decimal\nfrom myapp.models import Order\n\n@shared_task(bind=True, max_retries=3)\ndef generate_monthly_report(self, filters: dict, requested_by: object):\n    \"\"\"\n    BUG 1: 'requested_by' is a Django User model instance — not JSON serializable\n    BUG 2: filters dict contains Decimal and datetime objects — not serializable\n    BUG 3: task result stored but never checked — silent failure path\n    \"\"\"\n    try:\n        orders = Order.objects.filter(\n            created_at__gte=filters['start_date'],\n            user_id=requested_by.id\n        )\n        total = sum(o.amount for o in orders)\n        return {\"total\": total, \"count\": orders.count()}\n    except Exception as exc:\n        raise self.retry(exc=exc, countdown=60)\n\nfrom django.contrib.auth.decorators import login_required\nfrom django.http import JsonResponse\nfrom datetime import datetime\nfrom decimal import Decimal\nfrom tasks.reports import generate_monthly_report\n\n@login_required\ndef request_report(request):\n    filters = {\n        'start_date': datetime(2024, 1, 1),   # BUG: datetime not JSON-safe\n        'min_amount': Decimal('100.00'),       # BUG: Decimal not JSON-safe\n    }\n\n    # BUG: passing Django User object directly — not serializable\n    task = generate_monthly_report.delay(filters, request.user)\n\n    return JsonResponse({'task_id': task.id, 'status': 'queued'})",
+      error: "--- Celery Worker Log ---\n[2024-03-15 14:22:10,441: ERROR/MainProcess] Received unregistered task of\ntype 'tasks.reports.generate_monthly_report'.\nThe message has been ignored and discarded.\n\nkombu.exceptions.EncodeError: Object of type datetime is not JSON serializable\n  File \".../celery/app/amqp.py\", line 541, in publish_task\n    ...\n  File \".../kombu/serialization.py\", line 49, in dumps\n    return encoder(data)\n  File \".../json.py\", line 231, in encode\n    return _encoder(o, ...)\n  File \".../json/encoder.py\", line 180, in default\n    raise TypeError(f'Object of type {o.__class__.__name__} is not JSON serializable')\n\n[2024-03-15 14:22:10,445: CRITICAL] Task silently dropped. Message not enqueued.\n[2024-03-15 14:22:10,445: WARNING] No error surfaced to user — JsonResponse\nreturned {'task_id': 'abc123', 'status': 'queued'} but task never ran.\n\n--- If serialization passes (with pickle) — security issue:\n[2024-03-15 14:22:11,001: WARNING] Celery pickle serializer used — arbitrary\ncode execution possible if message broker (Redis/RabbitMQ) is compromised.",
+    },
+  ],
+  javascript: [
+    {
+      code: "const express = require('express');\nconst router = express.Router();\nconst db = require('../db');\n\n// BUG: No transaction or lock — two simultaneous requests cause race condition\nrouter.post('/deduct', async (req, res) => {\n    const { userId, amount } = req.body;\n\n    try {\n        const user = await db.query(\n            'SELECT balance FROM users WHERE id = $1', [userId]\n        );\n\n        const currentBalance = user.rows[0].balance;\n\n        if (currentBalance < amount) {\n            return res.status(400).json({ error: 'Insufficient funds' });\n        }\n\n        // Race condition: another request reads the same balance here\n        await new Promise(resolve => setTimeout(resolve, 50));\n\n        await db.query(\n            'UPDATE users SET balance = $1 WHERE id = $2',\n            [currentBalance - amount, userId]\n        );\n\n        res.json({ success: true, newBalance: currentBalance - amount });\n    } catch (err) {\n        next(err);  // BUG: 'next' is not defined in this scope!\n    }\n});\n\nmodule.exports = router;",
+      error: "[2024-03-15T10:23:41.234Z] POST /api/wallet/deduct 500\nReferenceError: next is not defined\n    at /app/routes/wallet.js:27:9\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n\n[2024-03-15T10:23:41.235Z] UnhandledPromiseRejection:\nError: Cannot set headers after they are sent to the client\n    at new NodeError (node:internal/errors:399:5)\n    at ServerResponse.setHeader (node:_http_outgoing:644:11)\n    at ServerResponse.header (/app/node_modules/express/lib/response.js:794:10)\n    at ServerResponse.json (/app/node_modules/express/lib/response.js:275:10)\n    at /app/routes/wallet.js:30:13\n\nSIDE EFFECT (Race Condition):\n  User starts with balance: $100\n  Request A reads $100, Request B reads $100 simultaneously\n  Request A deducts $80 → sets balance to $20\n  Request B deducts $80 → also sets balance to $20 (should be -$60, caught by check)\n  Net result: User deducted $160 but balance shows $20",
+    },
+    {
+      code: "import React, { useState, useEffect } from 'react';\nimport axios from 'axios';\n\nconst LiveDashboard = ({ userId, config }) => {\n    const [metrics, setMetrics] = useState([]);\n    const [loading, setLoading] = useState(false);\n    const [filters, setFilters] = useState({ range: '7d', type: 'all' });\n\n    const fetchMetrics = async () => {\n        setLoading(true);\n        try {\n            const res = await axios.get(`/api/metrics/${userId}`, {\n                params: { ...filters, ...config }\n            });\n            setMetrics(res.data);\n        } catch (err) {\n            console.error(err);\n        } finally {\n            setLoading(false);\n        }\n    };\n\n    useEffect(() => {\n        fetchMetrics();\n    }, [fetchMetrics]);\n\n    useEffect(() => {\n        const interval = setInterval(fetchMetrics, 5000);\n        return;\n    }, []);\n\n    useEffect(() => {\n        console.log('Config changed:', config);\n        fetchMetrics();\n    }, [config]);\n\n    return (\n        <div>\n            <button onClick={() => setFilters({ ...filters, range: '30d' })}>\n                Last 30 Days\n            </button>\n            {loading && <p>Loading...</p>}\n            {metrics.map(m => <div key={m.id}>{m.value}</div>)}\n        </div>\n    );\n};\n\nexport default LiveDashboard;\n\nconst ParentComponent = () => {\n    const [user, setUser] = useState({ id: 1 });\n    return <LiveDashboard userId={user.id} config={{ theme: 'dark' }} />;\n};",
+      error: "--- Browser Console ---\nWarning: Can't perform a React state update on an unmounted component.\nThis is a no-op, but it indicates a memory leak in your application.\nTo fix, cancel all subscriptions and asynchronous tasks in a useEffect cleanup.\n    at LiveDashboard (LiveDashboard.jsx:13)\n\nWarning: Maximum update depth exceeded. This can happen when a component\ncalls setState inside useEffect, but useEffect either doesn't have a\ndependency array, or one of the dependencies changes on every render.\n    at LiveDashboard\n    at ParentComponent\n\n--- React DevTools Profiler ---\n  Renders in 5s: 2,847 (infinite loop)\n  Wasted renders: 2,841\n\n--- Chrome Memory Tab ---\n  Heap snapshot: 487 MB\n  Detached DOM nodes: 1,240\n  Listeners not removed: 48 (setInterval callbacks)\n  Growing at: ~4 MB/second\n\n--- Network Tab ---\n  GET /api/metrics/1 — (PENDING)   ×1\n  GET /api/metrics/1 — (PENDING)   ×1\n  GET /api/metrics/1 — (PENDING)   ×1\n  ... (hundreds of in-flight requests)",
+    },
+  ],
+  typescript: [
+    {
+      code: "interface Entity {\n    id: number;\n    createdAt: Date;\n}\n\nclass BaseRepository<T extends Entity> {\n    private items: T[] = [];\n\n    save(entity: T): T {\n        this.items.push(entity);\n        return entity;\n    }\n\n    findById(id: number): T | undefined {\n        return this.items.find(item => item.id === id);\n    }\n\n    findAll(): T[] {\n        return this.items;\n    }\n}\n\ninterface User extends Entity {\n    name: string;\n    email: string;\n    role: 'admin' | 'user';\n}\n\ninterface RawUser {\n    id: number;\n    name: string;\n    email: string;\n    role: string;\n    createdAt: string;\n}\n\nclass UserRepository extends BaseRepository<User> {\n    saveFromApi(rawUser: RawUser): User {\n        return this.save(rawUser as unknown as User);\n    }\n}\n\nconst repo = new UserRepository();\n\nasync function syncUsers() {\n    const response = await fetch('/api/users');\n    const users: RawUser[] = await response.json();\n\n    for (const raw of users) {\n        const user = repo.saveFromApi(raw);\n        const daysSinceCreation = Math.floor(\n            (Date.now() - user.createdAt.getTime()) / 86400000\n        );\n        console.log(`User ${user.name} joined ${daysSinceCreation} days ago`);\n    }\n}\n\nsyncUsers();",
+      error: "error TS2345: Argument of type 'RawUser' is not assignable to parameter of\ntype 'User'.\n  Types of property 'role' are incompatible.\n    Type 'string' is not assignable to type '\"admin\" | \"user\"'.\n --> src/repositories/user.repository.ts:24:21\n  |\n24|         return this.save(rawUser as unknown as User);\n  |                     ^^^^^ (cast suppresses compile error)\n\nRUNTIME ERROR (after forced cast):\nTypeError: user.createdAt.getTime is not a function\n    at syncUsers (/app/services/user.service.ts:12:42)\n    at async Object.<anonymous> (/app/services/user.service.ts:17:1)",
+    },
+  ],
+  cpp: [
+    {
+      code: "#include <iostream>\n#include <vector>\n#include <string>\n#include <thread>\n#include <chrono>\n#include <algorithm>\n#include <mutex>\n\nstruct Connection {\n    int id;\n    std::string host;\n    bool isAlive;\n    std::chrono::steady_clock::time_point lastUsed;\n};\n\nclass ConnectionPool {\nprivate:\n    std::vector<Connection> connections;\n    std::mutex mtx;\n\npublic:\n    void addConnection(int id, const std::string& host) {\n        std::lock_guard<std::mutex> lock(mtx);\n        connections.push_back({id, host, true,\n            std::chrono::steady_clock::now()});\n    }\n\n    void removeStaleConnections() {\n        for (auto it = connections.begin(); it != connections.end(); ++it) {\n            auto age = std::chrono::steady_clock::now() - it->lastUsed;\n            if (age > std::chrono::seconds(30)) {\n                it = connections.erase(it);\n            }\n        }\n    }\n\n    void sendHeartbeat() {\n        for (auto& conn : connections) {\n            conn.isAlive = ping(conn.host);\n            conn.lastUsed = std::chrono::steady_clock::now();\n        }\n    }\n\n    bool ping(const std::string& host) { return true; }\n};\n\nint main() {\n    ConnectionPool pool;\n    for (int i = 0; i < 100; i++) {\n        pool.addConnection(i, \"db-host-\" + std::to_string(i));\n    }\n\n    std::thread cleanup([&pool]() {\n        while (true) {\n            pool.removeStaleConnections();\n            std::this_thread::sleep_for(std::chrono::seconds(5));\n        }\n    });\n\n    std::thread heartbeat([&pool]() {\n        while (true) {\n            pool.sendHeartbeat();\n            std::this_thread::sleep_for(std::chrono::seconds(2));\n        }\n    });\n\n    cleanup.join();\n    heartbeat.join();\n    return 0;\n}",
+      error: "==12345==ERROR: AddressSanitizer: heap-use-after-free on address 0x6020000001c0\nREAD of size 8 at 0x6020000001c0 thread T2\n    #0 0x402a34 in ConnectionPool::sendHeartbeat() connection_pool.cpp:38\n    #1 0x403b12 in main::lambda()::operator()() connection_pool.cpp:57\n    #2 0x7f...  in std::thread::_State_impl...\n\nTHREAD T1 freed 0x6020000001c0 here:\n    #0 0x401f10 in ConnectionPool::removeStaleConnections() connection_pool.cpp:30\n    #1 0x403a44 in main::lambda()::operator()() connection_pool.cpp:51\n\nSUMMARY: AddressSanitizer: heap-use-after-free connection_pool.cpp:38 in\nConnectionPool::sendHeartbeat()\n\nGDB BACKTRACE:\nProgram received signal SIGSEGV, Segmentation fault.\n[Switching to Thread 0x7f... (LWP 12347)]\n0x00007f... in std::vector<Connection>::_M_realloc_insert<Connection>()\n(gdb) bt\n#0  0x00007f... in std::vector<Connection>::_M_realloc_insert<Connection>()\n#1  0x00000000004029ab in ConnectionPool::removeStaleConnections() at connection_pool.cpp:30\n#2  0x0000000000402b44 in <lambda> at connection_pool.cpp:51",
+    },
+  ],
+  java: [
+    {
+      code: "package com.app.services;\n\nimport org.springframework.beans.factory.annotation.Autowired;\nimport org.springframework.stereotype.Service;\n\n@Service\npublic class OrderService {\n\n    @Autowired\n    private PaymentService paymentService;\n\n    public void placeOrder(String orderId, double amount) {\n        System.out.println(\"Placing order: \" + orderId);\n        paymentService.processPayment(orderId, amount);\n    }\n\n    public void handleRefund(String orderId) {\n        System.out.println(\"Handling refund for: \" + orderId);\n    }\n}\n\npackage com.app.services;\n\nimport org.springframework.beans.factory.annotation.Autowired;\nimport org.springframework.stereotype.Service;\n\n@Service\npublic class PaymentService {\n\n    @Autowired\n    private OrderService orderService;\n\n    public void processPayment(String orderId, double amount) {\n        System.out.println(\"Processing payment of $\" + amount);\n    }\n\n    public void refundPayment(String orderId) {\n        orderService.handleRefund(orderId);\n    }\n}\n\npackage com.app;\n\nimport org.springframework.boot.SpringApplication;\nimport org.springframework.boot.autoconfigure.SpringBootApplication;\n\n@SpringBootApplication\npublic class Application {\n    public static void main(String[] args) {\n        SpringApplication.run(Application.class, args);\n    }\n}",
+      error: ".   ____          _            __ _ _\n /\\\\ / ___'_ __ _ _(_)_ __  __ _ \\ \\ \\ \\\n( ( )\\___ | '_ | '_| | '_ \\/ _` | \\ \\ \\ \\\n \\\\/  ___)| |_)| | | | | || (_| |  ) ) ) )\n  '  |____| .__|_| |_|_| |_\\__, | / / / /\n =========|_|==============|___/=/_/_/_/\n\nThe dependencies of some of the beans in the application context form a cycle:\n\norderService -> paymentService -> orderService\n\nAction:\nRelying upon circular references is discouraged and they are prohibited by\ndefault. Update your application to remove the dependency cycle between beans.\nAs a last resort, it may be possible to break the dependency cycle automatically\nby setting spring.main.allow-circular-references to true.\n\n***************************\nAPPLICATION FAILED TO START\n***************************\n\nDescription:\nThe dependencies of some of the beans in the application context form a cycle:\n\ncom.app.services.OrderService defined in file [.../OrderService.class]\n      ↓\ncom.app.services.PaymentService defined in file [.../PaymentService.class]\n      ↑\ncom.app.services.OrderService (original bean)",
+    },
+  ],
+  go: [
+    {
+      code: "package handlers\n\nimport (\n    \"context\"\n    \"encoding/json\"\n    \"fmt\"\n    \"net/http\"\n    \"time\"\n)\n\ntype ReportResult struct {\n    Data  string `json:\"data\"`\n    Error string `json:\"error,omitempty\"`\n}\n\nfunc GenerateReport(w http.ResponseWriter, r *http.Request) {\n    resultCh := make(chan ReportResult)\n\n    go func() {\n        ctx := context.Background()\n        result, err := runHeavyReport(ctx)\n        if err != nil {\n            resultCh <- ReportResult{Error: err.Error()}\n            return\n        }\n        resultCh <- ReportResult{Data: result}\n    }()\n\n    select {\n    case res := <-resultCh:\n        json.NewEncoder(w).Encode(res)\n    case <-r.Context().Done():\n        http.Error(w, \"request cancelled\", http.StatusRequestTimeout)\n        return\n    }\n}\n\nfunc runHeavyReport(ctx context.Context) (string, error) {\n    for i := 0; i < 10; i++ {\n        select {\n        case <-ctx.Done():\n            return \"\", fmt.Errorf(\"context cancelled: %w\", ctx.Err())\n        case <-time.After(2 * time.Second):\n            fmt.Printf(\"processing step %d\\n\", i)\n        }\n    }\n    return \"report complete\", nil\n}\n\npackage main\n\nimport (\n    \"fmt\"\n    \"handlers\"\n    \"net/http\"\n    \"runtime\"\n    \"time\"\n)\n\nfunc main() {\n    http.HandleFunc(\"/report\", handlers.GenerateReport)\n\n    go func() {\n        for {\n            time.Sleep(5 * time.Second)\n            fmt.Printf(\"[MONITOR] Active goroutines: %d\\n\", runtime.NumGoroutine())\n        }\n    }()\n\n    http.ListenAndServe(\":8080\", nil)\n}",
+      error: "[MONITOR] Active goroutines: 3\n[MONITOR] Active goroutines: 3\n# (50 clients connect and immediately cancel)\n[MONITOR] Active goroutines: 53\n[MONITOR] Active goroutines: 103\n[MONITOR] Active goroutines: 153\nprocessing step 0\nprocessing step 1\nprocessing step 2\n... (leaked goroutines running indefinitely)\n\nRUNTIME DETECTION (with goleak in tests):\n--- FAIL: TestGenerateReport (0.01s)\n    goleak: found unexpected goroutines:\n    goroutine 35 [sleep]:\n        time.Sleep(0x77359400)\n            /usr/local/go/src/runtime/time.go:195 +0xd2\n        handlers.runHeavyReport(0x0?, 0xc000012060)\n            /app/handlers/report.go:40 +0x6c\n        handlers.GenerateReport.func1()\n            /app/handlers/report.go:22 +0x45",
+    },
+  ],
+  rust: [
+    {
+      code: "use actix_web::{web, Error, HttpRequest, HttpResponse};\nuse serde::Deserialize;\nuse sqlx::PgPool;\n\n#[derive(Deserialize)]\npub struct UploadPayload {\n    pub filename: String,\n    pub content: String,\n    pub user_id: i64,\n}\n\npub async fn upload_file(\n    req: HttpRequest,\n    payload: web::Json<UploadPayload>,\n    pool: web::Data<PgPool>,\n) -> Result<HttpResponse, Error> {\n    let filename_ref: &str = &payload.filename;\n    let content_ref: &str = &payload.content;\n\n    let result = sqlx::query!(\n        \"INSERT INTO files (name, content, user_id) VALUES ($1, $2, $3)\",\n        filename_ref,\n        content_ref,\n        payload.user_id\n    )\n    .execute(pool.get_ref())\n    .await\n    .map_err(|e| {\n        actix_web::error::ErrorInternalServerError(e)\n    })?;\n\n    Ok(HttpResponse::Ok().json(serde_json::json!({\n        \"message\": \"Uploaded\",\n        \"rows\": result.rows_affected()\n    })))\n}",
+      error: "error[E0597]: `payload` does not live long enough\n  --> src/handlers/upload.rs:19:29\n   |\n14 |     payload: web::Json<UploadPayload>,\n   |     ------- binding `payload` declared here\n...\n19 |     let filename_ref: &str = &payload.filename;\n   |                               ^^^^^^^ borrowed value does not live long enough\n...\n31 |     .await\n   |      ----- await occurs here, with `payload` borrowed\n...\n40 | }\n   | - `payload` dropped here while still borrowed\n\nerror[E0597]: `payload` does not live long enough\n  --> src/handlers/upload.rs:20:29\n   |\n20 |     let content_ref: &str = &payload.content;\n   |                              ^^^^^^^ borrowed value does not live long enough\n\nerror: future cannot be sent between threads safely\n  --> src/handlers/upload.rs:13:1\n   |\n13 | pub async fn upload_file(\n   |              ^^^^^^^^^^^ future is not `Send`\n   |\n   = note: captured value is not `Send` because borrow of\n     non-Send type `str` is held across an `await` point",
+    },
+  ],
+  php: [
+    {
+      code: "<?php\n\nclass UserRepository {\n    private PDO $db;\n\n    public function __construct(PDO $db) {\n        $this->db = $db;\n    }\n\n    public function findByUsername(string $username): ?array {\n        $sql = \"SELECT * FROM users WHERE username = '$username'\";\n        $stmt = $this->db->query($sql);\n        return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;\n    }\n\n    public function updateProfile(int $id, string $name, string $email): bool {\n        $stmt = $this->db->prepare(\n            \"UPDATE users SET name = ?, email = ?, updated_at = NOW() WHERE id = ?\"\n        );\n        return $stmt->execute([$name, $email]);\n    }\n\n    public function deleteUser(int $id): array {\n        $stmt = $this->db->prepare(\"DELETE FROM users WHERE id = ?\");\n        $stmt->execute([$id]);\n        return $stmt->fetchAll();\n    }\n}\n\n<?php\nrequire 'UserRepository.php';\n\n$pdo = new PDO('mysql:host=localhost;dbname=app', 'root', 'password');\n$repo = new UserRepository($pdo);\n\n$maliciousInput = \"' OR '1'='1\";\n$user = $repo->findByUsername($maliciousInput);\nvar_dump($user);\n\n$repo->updateProfile(1, \"Alice\", \"alice@example.com\");\n\n$deleted = $repo->deleteUser(2);\nvar_dump($deleted);",
+      error: "--- findByUsername (SQL Injection) ---\nSQL Executed: SELECT * FROM users WHERE username = '' OR '1'='1'\nResult: Returns ALL users in the table  <- security breach\n\n--- updateProfile (parameter mismatch) ---\nFatal error: Uncaught PDOException: SQLSTATE[HY093]: Invalid parameter number:\nnumber of bound variables does not match number of tokens in\n/app/UserRepository.php:21\nStack trace:\n#0 /app/UserRepository.php(21): PDOStatement->execute(Array)\n#1 /app/index.php(13): UserRepository->updateProfile(1, 'Alice', 'alice@...')\n#2 {main}\n  thrown in /app/UserRepository.php on line 21\n\n--- deleteUser (fetchAll on DELETE) ---\nWarning: PDOStatement::fetchAll(): SQLSTATE[HY000]: General error in\n/app/UserRepository.php on line 28\nStack trace:\n#0 /app/UserRepository.php(28): PDOStatement->fetchAll()\n#1 /app/index.php(17): UserRepository->deleteUser(2)\n#2 {main}",
+    },
+  ],
+  ruby: [
+    {
+      code: "module Api\n  class OrdersController < ApplicationController\n    def index\n      @orders = Order.all\n\n      result = @orders.map do |order|\n        {\n          id:          order.id,\n          total:       order.total,\n          user_name:   order.user.name,\n          user_city:   order.user.address.city,\n          item_count:  order.line_items.count\n        }\n      end\n\n      render json: result\n    end\n  end\nend\n\nclass Order < ApplicationRecord\n  belongs_to :user\n  has_many   :line_items\nend\n\nclass User < ApplicationRecord\n  has_one  :address\n  has_many :orders\nend",
+      error: "--- Rails Server Log (with 500 orders in DB) ---\nStarted GET \"/api/orders\" for 127.0.0.1 at 2024-03-15 11:04:22 +0000\nProcessing by Api::OrdersController#index as JSON\n\n  Order Load (3.2ms)  SELECT \"orders\".* FROM \"orders\"\n\n  User Load (0.4ms)   SELECT \"users\".* FROM \"users\" WHERE \"users\".\"id\" = 1  LIMIT 1\n  Address Load (0.3ms) SELECT \"addresses\".* FROM \"addresses\" WHERE \"addresses\".\"user_id\" = 1 LIMIT 1\n   (0.2ms)  SELECT COUNT(*) FROM \"line_items\" WHERE \"line_items\".\"order_id\" = 1\n\n  User Load (0.4ms)   SELECT \"users\".* FROM \"users\" WHERE \"users\".\"id\" = 2  LIMIT 1\n  Address Load (0.3ms) SELECT \"addresses\".* FROM \"addresses\" WHERE \"addresses\".\"user_id\" = 2 LIMIT 1\n   (0.2ms)  SELECT COUNT(*) FROM \"line_items\" WHERE \"line_items\".\"order_id\" = 2\n  ... (x500 more times)\n\nCompleted 200 OK in 4823ms (Views: 0.3ms | ActiveRecord: 4780.4ms | GC: 312ms)\n\nBULLET GEM ALERT:\n  GET /api/orders\n  USE eager loading detected for:\n    ↳ N+1 Query detected: Order => [:user]          (500 queries)\n    ↳ N+1 Query detected: Order => [user: :address] (500 queries)\n    ↳ N+1 Query detected: Order => [:line_items]    (500 counts)\n  Total extra queries: 1500\n\nMEMORY PROFILER (ruby-prof):\n  Total allocated: 142.8 MB (1,892,340 objects)\n  Retained:         88.3 MB (842,100 objects)\n  Top allocator: Order.all -> ActiveRecord::Result (120.4 MB)",
+    },
+  ],
+  csharp: [
+    {
+      code: "using Microsoft.AspNetCore.Mvc;\nusing System.Threading.Tasks;\n\n[ApiController]\n[Route(\"api/[controller]\")]\npublic class ReportController : ControllerBase\n{\n    private readonly IReportService _reportService;\n\n    public ReportController(IReportService reportService)\n    {\n        _reportService = reportService;\n    }\n\n    [HttpGet(\"{id}\")]\n    public IActionResult GetReport(int id)\n    {\n        var report = _reportService.GenerateReportAsync(id).Result;\n        return Ok(report);\n    }\n}\n\nusing System.Net.Http;\nusing System.Threading.Tasks;\n\npublic class ReportService : IReportService\n{\n    private readonly HttpClient _httpClient;\n    private readonly IDbContext _db;\n\n    public ReportService(HttpClient httpClient, IDbContext db)\n    {\n        _httpClient = httpClient;\n        _db = db;\n    }\n\n    public async Task<Report> GenerateReportAsync(int id)\n    {\n        var data = await _httpClient.GetStringAsync($\"/data/{id}\");\n        var meta = await _db.Reports.FindAsync(id);\n\n        return new Report {\n            Id = id,\n            Data = data,\n            Title = meta?.Title ?? \"Untitled\"\n        };\n    }\n}",
+      error: "GET /api/report/42\n\n[12:05:01.000] Request received: GET /api/report/42\n[12:05:01.001] Calling _reportService.GenerateReportAsync(42).Result\n[12:05:01.002] HttpClient.GetStringAsync started...\n[12:05:01.002] Awaiting continuation on SynchronizationContext...\n...\n[12:06:01.002] (60 seconds later — IIS/Kestrel request timeout)\n\nHTTP/1.1 504 Gateway Timeout\n\nIIS Application Pool Event Log:\n  Warning: A request has been aborted due to timeout (60000ms).\n  Thread pool starvation detected. Queued work items: 48\n  Active threads: 48 / 48 (all blocked)\n  Application pool: DefaultAppPool\n\nVISUAL STUDIO DIAGNOSTIC (Threads Window during hang):\n  Thread 12 (Request Thread) — BLOCKED at:\n    ReportController.GetReport() → Task.Result (waiting for Task)\n  Thread 13 (Async Continuation) — WAITING for:\n    SynchronizationContext (held by Thread 12)\n  → Thread 12 waits for Thread 13\n  → Thread 13 waits for Thread 12\n  → DEADLOCK",
+    },
+  ],
+};
+
+export const SAMPLE_ERROR_POOLS_BY_LANGUAGE: Record<AnalyzeRequestLanguage, SampleErrorPools> = {
+  python: { basic: SAMPLE_ERRORS_BY_LANGUAGE.python, complex: COMPLEX_SAMPLE_ERRORS_BY_LANGUAGE.python },
+  javascript: { basic: SAMPLE_ERRORS_BY_LANGUAGE.javascript, complex: COMPLEX_SAMPLE_ERRORS_BY_LANGUAGE.javascript },
+  typescript: { basic: SAMPLE_ERRORS_BY_LANGUAGE.typescript, complex: COMPLEX_SAMPLE_ERRORS_BY_LANGUAGE.typescript },
+  cpp: { basic: SAMPLE_ERRORS_BY_LANGUAGE.cpp, complex: COMPLEX_SAMPLE_ERRORS_BY_LANGUAGE.cpp },
+  java: { basic: SAMPLE_ERRORS_BY_LANGUAGE.java, complex: COMPLEX_SAMPLE_ERRORS_BY_LANGUAGE.java },
+  go: { basic: SAMPLE_ERRORS_BY_LANGUAGE.go, complex: COMPLEX_SAMPLE_ERRORS_BY_LANGUAGE.go },
+  rust: { basic: SAMPLE_ERRORS_BY_LANGUAGE.rust, complex: COMPLEX_SAMPLE_ERRORS_BY_LANGUAGE.rust },
+  php: { basic: SAMPLE_ERRORS_BY_LANGUAGE.php, complex: COMPLEX_SAMPLE_ERRORS_BY_LANGUAGE.php },
+  ruby: { basic: SAMPLE_ERRORS_BY_LANGUAGE.ruby, complex: COMPLEX_SAMPLE_ERRORS_BY_LANGUAGE.ruby },
+  csharp: { basic: SAMPLE_ERRORS_BY_LANGUAGE.csharp, complex: COMPLEX_SAMPLE_ERRORS_BY_LANGUAGE.csharp },
+};
+
+function getSampleKey(sample: Pick<SampleError, "code" | "error">): string {
+  return `${sample.code}:::${sample.error}`;
+}
+
+function pickRandomSample(
+  samples: SampleError[],
+  poolType: "basic" | "complex",
+  excludeSampleKey?: string,
+): SampleErrorSelection | null {
+  if (samples.length === 0) {
     return null;
   }
 
-  return samples[Math.floor(Math.random() * samples.length)] ?? null;
+  let selectedIndex = Math.floor(Math.random() * samples.length);
+
+  if (samples.length > 1 && excludeSampleKey) {
+    let attempts = 0;
+    while (getSampleKey(samples[selectedIndex]) === excludeSampleKey && attempts < samples.length * 2) {
+      selectedIndex = Math.floor(Math.random() * samples.length);
+      attempts += 1;
+    }
+  }
+
+  const selectedSample = samples[selectedIndex];
+  if (!selectedSample) {
+    return null;
+  }
+
+  return {
+    ...selectedSample,
+    index: selectedIndex,
+    poolType,
+  };
+}
+
+export function getRandomSampleError(
+  language: AnalyzeRequestLanguage,
+  previousSampleKey?: string,
+): SampleErrorSelection | null {
+  const pools = SAMPLE_ERROR_POOLS_BY_LANGUAGE[language];
+  if (!pools) {
+    return null;
+  }
+
+  const { basic, complex } = pools;
+
+  if (basic.length === 0 && complex.length === 0) {
+    return null;
+  }
+
+  if (complex.length === 0) {
+    return pickRandomSample(basic, "basic", previousSampleKey);
+  }
+
+  if (basic.length === 0) {
+    return pickRandomSample(complex, "complex", previousSampleKey);
+  }
+
+  const useComplexPool = Math.random() < 0.75;
+  const preferredPool = useComplexPool ? complex : basic;
+  const preferredPoolType = useComplexPool ? "complex" : "basic";
+  const fallbackPool = useComplexPool ? basic : complex;
+  const fallbackPoolType = useComplexPool ? "basic" : "complex";
+
+  const preferredSample = pickRandomSample(preferredPool, preferredPoolType, previousSampleKey);
+  if (preferredSample && getSampleKey(preferredSample) !== previousSampleKey) {
+    return preferredSample;
+  }
+
+  return pickRandomSample(fallbackPool, fallbackPoolType, previousSampleKey) ?? preferredSample;
 }
