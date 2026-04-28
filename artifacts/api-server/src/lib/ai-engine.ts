@@ -115,6 +115,22 @@ function validateDebugReport(parsed: unknown): DebugReport {
     throw new Error("AI response is not an object");
   }
   const obj = parsed as Record<string, unknown>;
+  const coerceString = (value: unknown): string | null => {
+    if (typeof value === "string") {
+      return value.trim() ? value : null;
+    }
+    if (Array.isArray(value)) {
+      const parts = value
+        .filter((item) => typeof item === "string")
+        .map((item) => item.trim())
+        .filter(Boolean);
+      return parts.length ? parts.join("\n") : null;
+    }
+    if (typeof value === "number") {
+      return String(value);
+    }
+    return null;
+  };
   const required = [
     "root_cause",
     "severity",
@@ -124,9 +140,11 @@ function validateDebugReport(parsed: unknown): DebugReport {
     "pro_tip",
   ];
   for (const field of required) {
-    if (typeof obj[field] !== "string" || !obj[field]) {
+    const coerced = coerceString(obj[field]);
+    if (!coerced) {
       throw new Error(`AI response missing or invalid field: ${field}`);
     }
+    obj[field] = coerced;
   }
   if (!isValidSeverity(obj.severity)) {
     obj.severity = "runtime_error";
