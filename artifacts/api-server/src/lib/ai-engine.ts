@@ -142,20 +142,7 @@ function validateDebugReport(parsed: unknown): DebugReport {
 }
 
 function getCandidateModels(): string[] {
-  const configured = process.env["AI_INTEGRATIONS_OPENAI_MODEL"];
-  if (configured) {
-    return configured
-      .split(",")
-      .map((model) => model.trim())
-      .filter(Boolean);
-  }
-
-  const baseUrl = process.env["AI_INTEGRATIONS_OPENAI_BASE_URL"] ?? "";
-  if (baseUrl.includes("generativelanguage.googleapis.com")) {
-    return ["gemini-2.5-flash", "gemini-2.0-flash"];
-  }
-
-  return ["gpt-4o-mini"];
+  return ["qwen/qwen3-32b"];
 }
 
 function isModelAvailabilityError(err: unknown): boolean {
@@ -183,6 +170,37 @@ function isModelAvailabilityError(err: unknown): boolean {
   return maybeErr.status === 404 || message.includes("does not exist");
 }
 
+function clampSection(
+  label: string,
+  value: string,
+  maxChars: number,
+): string {
+  if (value.length <= maxChars) {
+    return value;
+  }
+
+  const headChars = Math.floor(maxChars * 0.65);
+  const tailChars = Math.floor(maxChars * 0.25);
+  const omittedChars = value.length - headChars - tailChars;
+
+  return [
+    value.slice(0, headChars),
+    `\n\n[${label.toUpperCase()} TRUNCATED: omitted ${omittedChars} characters to fit model limits]\n\n`,
+    value.slice(-tailChars),
+  ].join("");
+}
+
+function buildBoundedUserPrompt(
+  language: string,
+  error: string,
+  code: string,
+): string {
+  const boundedError = clampSection("error", error, 1_500);
+  const boundedCode = clampSection("code", code, 8_000);
+
+  return buildUserPrompt(language, boundedError, boundedCode);
+}
+
 export async function analyzeCode(
   code: string,
   error: string,
@@ -190,8 +208,9 @@ export async function analyzeCode(
   mode: "standard" | "eli5",
 ): Promise<{ report: DebugReport; tokensUsed: number }> {
   const systemPrompt = buildSystemPrompt(mode);
-  const userPrompt = buildUserPrompt(language, error, code);
+  const userPrompt = buildBoundedUserPrompt(language, error, code);
   const candidateModels = getCandidateModels();
+  const maxCompletionTokens = 1200;
 
   let lastError: Error | null = null;
   const maxRetries = 3;
@@ -201,7 +220,7 @@ export async function analyzeCode(
       try {
         const response = await openai.chat.completions.create({
           model,
-          max_tokens: 8192,
+          max_tokens: maxCompletionTokens,
           temperature: 0.2,
           response_format: { type: "json_object" },
           messages: [
