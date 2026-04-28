@@ -142,7 +142,7 @@ function validateDebugReport(parsed: unknown): DebugReport {
 }
 
 function getCandidateModels(): string[] {
-  return ["llama-3.3-70b-versatile", "qwen/qwen3-32b"];
+  return ["qwen/qwen3-32b", "llama-3.3-70b-versatile"];
 }
 
 function isModelAvailabilityError(err: unknown): boolean {
