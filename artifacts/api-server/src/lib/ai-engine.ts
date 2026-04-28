@@ -141,6 +141,38 @@ function validateDebugReport(parsed: unknown): DebugReport {
   };
 }
 
+<<<<<<< Updated upstream
+=======
+function getCandidateModels(): string[] {
+  return ["qwen/qwen3-32b", "llama-3.3-70b-versatile"];
+}
+
+function isModelAvailabilityError(err: unknown): boolean {
+  if (!err || typeof err !== "object") {
+    return false;
+  }
+
+  const maybeErr = err as {
+    status?: number;
+    message?: string;
+    error?: { message?: string; code?: string };
+    code?: string;
+  };
+
+  const message = [
+    maybeErr.message,
+    maybeErr.error?.message,
+    maybeErr.error?.code,
+    maybeErr.code,
+  ]
+    .filter((value): value is string => typeof value === "string")
+    .join(" ")
+    .toLowerCase();
+
+  return maybeErr.status === 404 || message.includes("does not exist");
+}
+
+>>>>>>> Stashed changes
 export async function analyzeCode(
   code: string,
   error: string,
