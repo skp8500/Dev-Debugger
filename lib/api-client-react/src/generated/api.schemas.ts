@@ -57,7 +57,7 @@ export const AnalyzeRequestLanguage = {
   python: "python",
   javascript: "javascript",
   typescript: "typescript",
-  cpp: "cpp",
+  "c++": "c++",
   java: "java",
   go: "go",
   rust: "rust",

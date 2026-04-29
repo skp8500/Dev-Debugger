@@ -408,7 +408,7 @@ components:
             - python
             - javascript
             - typescript
-            - cpp
+            - c++
             - java
             - go
             - rust
