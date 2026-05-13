@@ -1,435 +1,199 @@
-# 🚀 Smart Dev Debugger
+# Smart Dev Debugger
 
-> AI-Powered Developer Assistant for Debugging, Understanding, and Fixing Code Errors
+AI-powered debugging workspace for developers who want faster answers than raw stack traces can provide. Paste broken code and the error message, and the app returns a structured report with the root cause, a fix plan, a plain-English explanation, corrected code, and a senior-engineer pro tip.
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
-![React](https://img.shields.io/badge/frontend-React-61DAFB)
-![Node.js](https://img.shields.io/badge/backend-Node.js-339933)
-![Docker](https://img.shields.io/badge/containerized-Docker-2496ED)
-![AI Powered](https://img.shields.io/badge/AI-Groq%20%7C%20Gemini-purple)
+![Monorepo](https://img.shields.io/badge/workspace-pnpm-F69220)
+![Frontend](https://img.shields.io/badge/frontend-React%20%2B%20Vite-646CFF)
+![Backend](https://img.shields.io/badge/backend-Express-000000)
+![Database](https://img.shields.io/badge/database-PostgreSQL-336791)
 
----
+## Preview / Demo
 
-# 📌 Overview
+![Preview](artifacts/smart-dev-debugger/public/opengraph.jpg)
 
-Smart Dev Debugger is an AI-powered full-stack web application that helps developers quickly identify, understand, and fix coding errors.
+Core flow:
 
-Instead of showing confusing compiler messages or stack traces, the platform analyzes the error using AI and provides:
+1. Sign up or log in
+2. Paste code plus the error or stack trace
+3. Choose a language and explanation mode
+4. Receive a full debug report with corrected code
+5. Revisit past sessions from history
 
-* ✅ Root cause analysis
-* ✅ Fix suggestions
-* ✅ Beginner-friendly explanations
-* ✅ Corrected code
-* ✅ Multi-language support
+## Features
 
-The goal of this project is to simplify debugging for students, beginner programmers, and developers while demonstrating real-world AI integration and scalable full-stack architecture.
+- AI-generated root cause analysis for broken code and runtime errors
+- Two explanation modes: `standard` and beginner-friendly `eli5`
+- Corrected code output with copy and download actions
+- Session history with per-user persistence
+- Usage credits system for analysis requests
+- Google OAuth and email/password authentication
+- Request validation, rate limiting, and cached responses
+- Shared API schema and generated client packages inside a pnpm monorepo
 
----
+## Installation
 
-# 🎯 Problem Statement
+### Prerequisites
 
-Developers — especially beginners — spend hours debugging:
+- Node.js 20+
+- `pnpm`
+- PostgreSQL database URL
+- An OpenAI-compatible model endpoint or key configured through `.env`
 
-* Syntax errors
-* Runtime errors
-* Logical issues
-* Stack traces
-* Configuration mistakes
+### Setup
 
-Most debugging tools only show raw errors without properly explaining:
+1. Clone the repository.
 
-* WHY the issue happened
-* HOW to fix it
-* HOW to avoid it in the future
+```bash
+git clone <repo-url>
+cd "Dev Debugger"
+```
 
-Smart Dev Debugger solves this by combining AI reasoning with a clean developer experience.
+2. Install workspace dependencies.
 
----
+```bash
+pnpm install
+```
 
-# ✨ Features
+3. Create your environment file.
 
-## 🧠 AI-Powered Debugging
+```bash
+cp .env.example .env
+```
 
-* Analyze code errors instantly
-* Root-cause detection
-* Smart fix suggestions
-* AI-generated corrected code
+4. Fill in the required values in `.env`.
 
-## 💻 Multi-Language Support
+5. Start the API server.
 
-Supports:
+```bash
+pnpm --filter @workspace/api-server dev
+```
 
-* JavaScript
-* Python
-* C++
-* More languages can be added easily
+6. In a second terminal, start the frontend.
 
-## 📖 Beginner-Friendly Explanations
+```bash
+pnpm --filter @workspace/smart-dev-debugger dev
+```
 
-"Explain Like I’m 10" mode simplifies technical concepts for beginners.
+## Usage
 
-## 🔐 Authentication System
+After both apps are running:
 
-* JWT Authentication
-* Google OAuth Login
-* Secure session handling
+1. Open the frontend in your browser.
+2. Register a new account or sign in.
+3. Paste the broken code into the code panel.
+4. Paste the error message or stack trace.
+5. Select the programming language.
+6. Choose `standard` or `eli5` explanation mode.
+7. Click `Debug Now` to generate the report.
 
-## 📝 Error History
+The app returns:
 
-Users can revisit previously analyzed debugging sessions.
+- Root cause
+- Severity
+- Step-by-step fix instructions
+- Explanation
+- Corrected code
+- Pro tip
 
-## 🌙 Modern UI
+## Configuration
 
-* Responsive design
-* Dark mode support
-* Clean debugging dashboard
+Copy `.env.example` to `.env` and set the following values:
 
-## 🐳 Dockerized Architecture
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `NODE_ENV` | Yes | Runtime mode |
+| `PORT` | Yes | API server port |
+| `DATABASE_URL` | Yes | PostgreSQL connection string |
+| `AI_INTEGRATIONS_OPENAI_API_KEY` | Yes | API key for the OpenAI-compatible provider |
+| `AI_INTEGRATIONS_OPENAI_BASE_URL` | Yes | Base URL for the provider |
+| `GOOGLE_CLIENT_ID` | Optional | Enables Google sign-in |
+| `GOOGLE_CLIENT_SECRET` | Optional | Enables Google sign-in |
+| `SESSION_SECRET` | Yes | Session and JWT signing secret |
 
-* Frontend container
-* Backend container
-* Database container
-* Easy local setup & deployment
+Notes:
 
----
+- Google OAuth is only active when both Google credentials are present.
+- The frontend proxies `/api` requests to `http://localhost:3001` during local development.
+- New users currently start with `100` debugging credits.
 
-# 🧱 Tech Stack
+## Tech Stack
 
-## Frontend
+- React 19
+- Vite
+- TypeScript
+- Express 5
+- Drizzle ORM
+- PostgreSQL
+- TanStack Query
+- Tailwind CSS 4
+- Zod
+- pnpm workspaces
 
-* React.js / Next.js
-* Tailwind CSS
-* Axios
-* Monaco Editor
-
-## Backend
-
-* Node.js
-* Express.js
-* REST APIs
-
-## Database
-
-* PostgreSQL (Neon DB)
-
-## AI Integration
-
-* Groq API
-* Gemini API
-
-## Authentication
-
-* JWT Authentication
-* Google OAuth
-
-## DevOps
-
-* Docker
-* Docker Compose
-
----
-
-# 🐳 Why Docker?
-
-Docker was used to containerize the entire application and ensure:
-
-* Consistent environments across systems
-* Easy setup using a single command
-* Service isolation
-* Scalable architecture
-* Simplified deployment process
-
-### Containers Used
-
-| Container | Purpose                     |
-| --------- | --------------------------- |
-| Frontend  | React application           |
-| Backend   | API server + AI integration |
-| Database  | PostgreSQL storage          |
-
----
-
-# 🏗️ System Architecture
+## Project Structure
 
 ```text
-┌──────────────────┐
-│     Frontend     │
-│ React / Next.js  │
-└────────┬─────────┘
-         │
-         ▼
-┌──────────────────┐
-│     Backend      │
-│ Node.js/Express  │
-└────────┬─────────┘
-         │
- ┌───────┴────────┐
- ▼                ▼
-AI APIs       PostgreSQL
-Groq/Gemini     Database
-```
-
----
-
-# ⚙️ Environment Variables
-
-Create a `.env` file in the root directory.
-
-```env
-# AI
-AI_API_KEY=your_api_key
-
-# Database
-DATABASE_URL=your_database_url
-
-# JWT
-JWT_SECRET=your_secret_key
-
-# Google OAuth
-GOOGLE_CLIENT_ID=your_google_client_id
-GOOGLE_CLIENT_SECRET=your_google_client_secret
-```
-
----
-
-# 🚀 Installation & Setup
-
-## 1️⃣ Clone Repository
-
-```bash
-git clone https://github.com/yourusername/smart-dev-debugger.git
-cd smart-dev-debugger
-```
-
----
-
-## 2️⃣ Install Dependencies
-
-### Frontend
-
-```bash
-cd frontend
-npm install
-```
-
-### Backend
-
-```bash
-cd backend
-npm install
-```
-
----
-
-# 🐳 Run with Docker
-
-## Start Containers
-
-```bash
-docker-compose up --build
-```
-
----
-
-# ▶️ Run Locally Without Docker
-
-## Backend
-
-```bash
-cd backend
-npm run dev
-```
-
-## Frontend
-
-```bash
-cd frontend
-npm run dev
-```
-
----
-
-# 🔑 Authentication Flow
-
-## JWT Authentication
-
-1. User registers/login
-2. Backend generates JWT token
-3. Token stored securely
-4. Protected routes verify token
-
-## Google OAuth
-
-1. User clicks Google Login
-2. OAuth consent screen opens
-3. Google authenticates user
-4. Backend receives callback
-5. User session created
-
----
-
-# 📡 API Endpoints
-
-## Authentication
-
-### Register
-
-```http
-POST /api/register
-```
-
-### Login
-
-```http
-POST /api/login
-```
-
-### Google OAuth
-
-```http
-GET /auth/google
-```
-
----
-
-## AI Debugging
-
-### Analyze Code Error
-
-```http
-POST /api/analyze
-```
-
-### Request Body
-
-```json
-{
-  "language": "javascript",
-  "code": "console.log(a)",
-  "error": "ReferenceError: a is not defined"
-}
-```
-
-### Response
-
-```json
-{
-  "rootCause": "Variable 'a' is not defined.",
-  "fix": "Define the variable before using it.",
-  "explanation": "JavaScript cannot find variable 'a'.",
-  "correctedCode": "const a = 'Hello'; console.log(a);"
-}
-```
-
----
-
-# 📂 Project Structure
-
-```text
-smart-dev-debugger/
-│
-├── frontend/
-│   ├── src/
-│   ├── components/
-│   └── pages/
-│
-├── backend/
-│   ├── routes/
-│   ├── controllers/
-│   ├── middleware/
-│   └── services/
-│
+Dev Debugger/
+├── artifacts/
+│   ├── api-server/               # Express API
+│   ├── smart-dev-debugger/       # Main React frontend
+│   └── mockup-sandbox/           # UI sandbox
+├── lib/
+│   ├── api-client-react/         # Generated React API client
+│   ├── api-spec/                 # OpenAPI spec
+│   ├── api-zod/                  # Generated schemas/types
+│   ├── db/                       # Drizzle schema and DB helpers
+│   └── integrations-openai-ai-*  # AI integration packages
+├── scripts/                      # Workspace scripts
 ├── docker-compose.yml
-├── .env
+├── Dockerfile
 └── README.md
 ```
 
----
+## Docker
 
-# 🔥 Future Improvements
+This repository includes Docker files for running the API service in a container:
 
-* GitHub repository analysis
-* AI-powered code optimization
-* Team collaboration
-* VS Code extension
-* Voice-based debugging assistant
-* AI model switching
-* Real-time debugging suggestions
+```bash
+docker compose up --build
+```
 
----
+Current `docker-compose.yml` is focused on the API service. The frontend still runs separately during local development unless you extend the compose setup.
 
-# 📈 Learning Outcomes
+## API Highlights
 
-This project helped in understanding:
+Key routes implemented in the API:
 
-* Full-stack architecture
-* AI API integration
-* Authentication systems
-* Docker containerization
-* REST API development
-* Environment variable management
-* Scalable project structure
+- `POST /api/auth/register`
+- `POST /api/auth/login`
+- `POST /api/auth/logout`
+- `GET /api/auth/me`
+- `GET /api/auth/google`
+- `POST /api/v1/analyze`
+- `GET /api/v1/history`
+- `GET /api/v1/history/:sessionId`
+- `DELETE /api/v1/history`
+- `GET /api/v1/stats`
+- `GET /api/healthz`
 
----
+## Contributing
 
-# 🌍 Real-World Applications
+Pull requests are welcome. If you want to make a larger change, open an issue first so the direction can be discussed before implementation.
 
-Smart Dev Debugger can be useful for:
-
-* Students learning programming
-* Coding interview preparation
-* Beginner developers
-* Debugging practice
-* Developer productivity improvement
-
----
-
-# 🛡️ Security Considerations
-
-* Environment variables stored securely
-* JWT-based authentication
-* OAuth integration
-* Sensitive keys excluded using `.gitignore`
-* API request validation
-
----
-
-# 🤝 Contributing
-
-Contributions are welcome.
+Basic workflow:
 
 1. Fork the repository
-2. Create a new branch
-3. Commit changes
-4. Open a Pull Request
+2. Create a feature branch
+3. Make your changes
+4. Run type checks
+5. Open a pull request
 
----
+Helpful command:
 
-# 📄 License
+```bash
+pnpm run typecheck
+```
 
-This project is licensed under the MIT License.
+## License
 
----
-
-# 👨‍💻 Author
-
-### Shiv Kumar
-
-* Full-Stack Developer
-* AI & Developer Tools Enthusiast
-
----
-
-# ⭐ Final Note
-
-Smart Dev Debugger is more than just a debugging tool.
-
-It demonstrates:
-
-* Real-world AI integration
-* Production-level full-stack development
-* Dockerized architecture
-* Authentication systems
-* Developer-focused problem solving
-
-If you found this project useful, consider giving it a ⭐ on GitHub.
+MIT License
