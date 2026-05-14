@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/theme-provider";
 import { AuthProvider } from "@/contexts/auth-context";
+import { BackendProvider } from "@/contexts/backend-context";
 import { RouteGuard } from "@/components/protected-route";
 import NotFound from "@/pages/not-found";
 import Landing from "@/pages/landing";
@@ -74,14 +75,16 @@ function App() {
   return (
     <ThemeProvider defaultTheme="dark" storageKey="devdebug-theme">
       <QueryClientProvider client={queryClient}>
-        <AuthProvider>
-          <TooltipProvider>
-            <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-              <Router />
-            </WouterRouter>
-            <Toaster />
-          </TooltipProvider>
-        </AuthProvider>
+        <BackendProvider>
+          <AuthProvider>
+            <TooltipProvider>
+              <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+                <Router />
+              </WouterRouter>
+              <Toaster />
+            </TooltipProvider>
+          </AuthProvider>
+        </BackendProvider>
       </QueryClientProvider>
     </ThemeProvider>
   );

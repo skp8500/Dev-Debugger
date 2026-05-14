@@ -1,28 +1,40 @@
-// Environment variables are loaded BEFORE this script runs via:
-// node --env-file=../../.env dist/index.mjs
-// (configured in package.json "start" script)
+import http from "node:http";
 import app from "./app";
-import { logger } from "./lib/logger";
+import { env } from "./config/env";
+import { platformTag, isPrimaryInstance } from "./config/platform";
+import { startPrimaryOnlyServices } from "./services/primary-instance";
+import { registerProcessHandlers } from "./services/shutdown";
+import { initializeWebsocketLayer } from "./services/websocket";
+import { logger } from "./utils/logger";
 
-const rawPort = process.env["PORT"];
-
-if (!rawPort) {
-  throw new Error(
-    "PORT environment variable is required but was not provided.",
-  );
-}
-
-const port = Number(rawPort);
+const PORT = process.env.PORT || 3000;
+const port = Number(PORT);
 
 if (Number.isNaN(port) || port <= 0) {
-  throw new Error(`Invalid PORT value: "${rawPort}"`);
+  throw new Error(`Invalid PORT value: "${PORT}"`);
 }
 
-app.listen(port, (err) => {
-  if (err) {
-    logger.error({ err }, "Error listening on port");
-    process.exit(1);
-  }
+const server = http.createServer(app);
 
-  logger.info({ port }, "Server listening");
+registerProcessHandlers(server);
+
+server.listen(port, async () => {
+  logger.info(
+    {
+      port,
+      nodeEnv: env.NODE_ENV,
+      platform: env.PLATFORM,
+      isPrimary: isPrimaryInstance,
+      frontendUrl: env.FRONTEND_URL ?? null,
+    },
+    `${platformTag} server listening`,
+  );
+
+  await initializeWebsocketLayer(server);
+  await startPrimaryOnlyServices();
+});
+
+server.on("error", (err) => {
+  logger.error({ err }, "Error listening on port");
+  process.exit(1);
 });

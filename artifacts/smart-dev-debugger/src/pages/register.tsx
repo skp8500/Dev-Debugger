@@ -7,8 +7,9 @@ import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Terminal, AlertCircle, Loader2 } from "lucide-react";
 import { ApiError } from "@workspace/api-client-react";
+import { getApiUrl } from "@/lib/api";
 
-const GOOGLE_BASE_PATH = `${import.meta.env.BASE_URL.replace(/\/$/, "")}/api/auth/google`;
+const GOOGLE_BASE_PATH = "/api/auth/google";
 
 function GoogleIcon() {
   return (
@@ -106,7 +107,7 @@ export default function Register() {
             variant="outline"
             className="w-full gap-2"
             onClick={() => {
-              window.location.href = GOOGLE_BASE_PATH;
+              window.location.href = getApiUrl(GOOGLE_BASE_PATH);
             }}
             data-testid="button-google-register"
           >

@@ -7,16 +7,9 @@ import { buildCacheKey, getCached, setCached } from "../lib/cache";
 import { checkRateLimit, hashIp } from "../lib/rate-limiter";
 import { AnalyzeRequestSchema } from "@workspace/db";
 import { requireAuth } from "../middleware/auth";
+import { getClientIp } from "../utils/http";
 
 const router: IRouter = Router();
-
-function getClientIp(req: import("express").Request): string {
-  const forwarded = req.headers["x-forwarded-for"];
-  if (typeof forwarded === "string") {
-    return forwarded.split(",")[0].trim();
-  }
-  return req.socket.remoteAddress ?? "unknown";
-}
 
 router.post("/v1/analyze", requireAuth, async (req, res): Promise<void> => {
   const user = req.user!;
@@ -214,11 +207,11 @@ router.get("/v1/stats", requireAuth, async (req, res): Promise<void> => {
     res.json({
       totalSessions: Number(totalResult?.count ?? 0),
       cachedResponses: Number(cachedResult?.count ?? 0),
-      byLanguage: byLanguage.map((r) => ({
+      byLanguage: byLanguage.map((r: { language: string; count: unknown }) => ({
         language: r.language,
         count: Number(r.count),
       })),
-      bySeverity: bySeverity.map((r) => ({
+      bySeverity: bySeverity.map((r: { severity: string; count: unknown }) => ({
         severity: r.severity,
         count: Number(r.count),
       })),
