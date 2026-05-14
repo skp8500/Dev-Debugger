@@ -1,6 +1,6 @@
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
-import * as schema from "./schema";
+import * as schema from "./schema/index";
 
 const { Pool } = pg;
 
@@ -50,4 +50,4 @@ export async function closeDatabaseConnections(): Promise<void> {
   }
 }
 
-export * from "./schema";
+export * from "./schema/index";
