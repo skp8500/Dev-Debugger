@@ -8,7 +8,7 @@ COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
 COPY lib/ ./lib/
 COPY artifacts/api-server/package.json ./artifacts/api-server/
 
-RUN pnpm install --frozen-lockfile --prod=false --allow-build=esbuild
+RUN pnpm install --frozen-lockfile --prod=false
 
 # ── Stage 2: Build ───────────────────────────────────────────
 FROM deps AS build
