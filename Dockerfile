@@ -1,14 +1,14 @@
 # ── Stage 1: Install dependencies ────────────────────────────
 FROM node:22-alpine AS deps
 
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN corepack enable && corepack prepare pnpm@10.33.2 --activate
 
 WORKDIR /app
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
 COPY lib/ ./lib/
 COPY artifacts/api-server/package.json ./artifacts/api-server/
 
-RUN pnpm install --frozen-lockfile --prod=false
+RUN pnpm install --frozen-lockfile --prod=false --allow-build=esbuild
 
 # ── Stage 2: Build ───────────────────────────────────────────
 FROM deps AS build
