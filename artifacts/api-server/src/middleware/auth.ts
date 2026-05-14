@@ -1,12 +1,13 @@
 import type { Request, Response, NextFunction } from "express";
 import { db, usersTable, type UserRecord } from "@workspace/db";
 import { eq } from "drizzle-orm";
-import { COOKIE_NAME, verifyToken } from "../lib/auth";
+import { COOKIE_NAME, verifyToken } from "../services/auth";
 
-declare module "express-serve-static-core" {
-  // eslint-disable-next-line @typescript-eslint/no-empty-object-type
-  interface Request {
-    user?: UserRecord;
+declare global {
+  namespace Express {
+    interface Request {
+      user?: UserRecord;
+    }
   }
 }
 

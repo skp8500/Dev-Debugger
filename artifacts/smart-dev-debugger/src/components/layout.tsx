@@ -3,6 +3,7 @@ import { Link, useLocation } from "wouter";
 import { useTheme } from "./theme-provider";
 import { Terminal, Moon, Sun } from "lucide-react";
 import { Button } from "./ui/button";
+import { BackendBanner } from "./backend-banner";
 import { UserPanel } from "./user-panel";
 
 export function Layout({ children }: { children: React.ReactNode }) {
@@ -45,6 +46,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </Button>
         </div>
       </header>
+      <BackendBanner />
       <main className="flex-1 flex overflow-hidden">{children}</main>
       <UserPanel />
     </div>

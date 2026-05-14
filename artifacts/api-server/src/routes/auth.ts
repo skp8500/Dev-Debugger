@@ -8,7 +8,7 @@ import {
   hashPassword,
   signToken,
   verifyPassword,
-} from "../lib/auth";
+} from "../services/auth";
 
 const router: IRouter = Router();
 
@@ -134,7 +134,7 @@ router.get("/auth/me", async (req, res): Promise<void> => {
     return;
   }
 
-  const { verifyToken } = await import("../lib/auth");
+  const { verifyToken } = await import("../services/auth");
   const payload = verifyToken(token);
   if (!payload) {
     res.status(401).json({
@@ -170,6 +170,11 @@ router.get("/auth/me", async (req, res): Promise<void> => {
 const GOOGLE_CLIENT_ID = process.env["GOOGLE_CLIENT_ID"];
 const GOOGLE_CLIENT_SECRET = process.env["GOOGLE_CLIENT_SECRET"];
 const GOOGLE_OAUTH_ENABLED = Boolean(GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET);
+type HttpFetchResponse = {
+  ok: boolean;
+  status: number;
+  json(): Promise<unknown>;
+};
 
 function getCallbackUrl(req: import("express").Request): string {
   const proto = req.headers["x-forwarded-proto"]?.toString().split(",")[0] || req.protocol;
@@ -208,7 +213,7 @@ router.get("/auth/google/callback", async (req, res): Promise<void> => {
   }
 
   try {
-    const tokenResp = await fetch("https://oauth2.googleapis.com/token", {
+    const tokenResp = (await fetch("https://oauth2.googleapis.com/token", {
       method: "POST",
       headers: { "content-type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
@@ -218,7 +223,7 @@ router.get("/auth/google/callback", async (req, res): Promise<void> => {
         redirect_uri: getCallbackUrl(req),
         grant_type: "authorization_code",
       }),
-    });
+    })) as HttpFetchResponse;
 
     if (!tokenResp.ok) {
       req.log.error(
@@ -235,10 +240,10 @@ router.get("/auth/google/callback", async (req, res): Promise<void> => {
       return;
     }
 
-    const profileResp = await fetch(
+    const profileResp = (await fetch(
       "https://www.googleapis.com/oauth2/v3/userinfo",
       { headers: { authorization: `Bearer ${tokenData.access_token}` } },
-    );
+    )) as HttpFetchResponse;
     if (!profileResp.ok) {
       res.redirect("/login?error=google_oauth_failed");
       return;

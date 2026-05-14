@@ -15,6 +15,7 @@ export default defineConfig(async ({ mode }) => {
   }
 
   const basePath = env.BASE_PATH ?? "/";
+  const localApiProxyTarget = env.VITE_LOCAL_API_PROXY_TARGET ?? "http://localhost:3000";
 
   return {
     base: basePath,
@@ -64,7 +65,7 @@ export default defineConfig(async ({ mode }) => {
       // Proxy API requests to the Express backend during local development
       proxy: {
         "/api": {
-          target: "http://localhost:3001",
+          target: localApiProxyTarget,
           changeOrigin: true,
           secure: false,
         },

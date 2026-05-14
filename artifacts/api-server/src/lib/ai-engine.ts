@@ -1,5 +1,5 @@
 import { openai } from "@workspace/integrations-openai-ai-server";
-import { logger } from "./logger";
+import { logger } from "../utils/logger";
 
 export type Severity =
   | "syntax_error"
