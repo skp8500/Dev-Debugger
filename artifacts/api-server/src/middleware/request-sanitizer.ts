@@ -2,12 +2,16 @@ import type { NextFunction, Request, Response } from "express";
 
 const BLOCKED_KEYS = new Set(["__proto__", "prototype", "constructor"]);
 
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
 function sanitizeValue(value: unknown): unknown {
   if (Array.isArray(value)) {
     return value.map(sanitizeValue);
   }
 
-  if (value && typeof value === "object") {
+  if (isPlainRecord(value)) {
     const input = value as Record<string, unknown>;
     const sanitized: Record<string, unknown> = {};
 
@@ -29,6 +33,20 @@ function sanitizeValue(value: unknown): unknown {
   return value;
 }
 
+function sanitizeRecordInPlace(record: Record<string, unknown>): void {
+  const sanitized = sanitizeValue(record);
+
+  if (!isPlainRecord(sanitized)) {
+    return;
+  }
+
+  for (const key of Object.keys(record)) {
+    delete record[key];
+  }
+
+  Object.assign(record, sanitized);
+}
+
 export function requestSanitizer(
   req: Request,
   _res: Response,
@@ -38,12 +56,12 @@ export function requestSanitizer(
     req.body = sanitizeValue(req.body);
   }
 
-  if (req.query && typeof req.query === "object") {
-    req.query = sanitizeValue(req.query) as Request["query"];
+  if (isPlainRecord(req.query)) {
+    sanitizeRecordInPlace(req.query);
   }
 
-  if (req.params && typeof req.params === "object") {
-    req.params = sanitizeValue(req.params) as Request["params"];
+  if (isPlainRecord(req.params)) {
+    sanitizeRecordInPlace(req.params);
   }
 
   next();
