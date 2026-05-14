@@ -65,6 +65,23 @@ app.use(express.urlencoded({ extended: true }));
 app.use(requestSanitizer);
 app.use(apiRateLimiter);
 
+app.get("/", (_req, res) => {
+  if (env.FRONTEND_URL) {
+    res.redirect(env.FRONTEND_URL);
+    return;
+  }
+
+  res.status(200).json({
+    service: "dev-debugger-api",
+    status: "ok",
+    message: "API server is running.",
+    docs: {
+      health: "/api/health",
+      version: "/api/version",
+    },
+  });
+});
+
 app.get("/ping", (_req, res) => {
   res.status(200).send("OK");
 });
