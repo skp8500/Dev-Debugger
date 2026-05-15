@@ -46,14 +46,35 @@ app.use(
   }),
 );
 
-const allowedOrigins = [
-  env.FRONTEND_URL,
+const allowedOrigins = new Set([
+  ...env.FRONTEND_URL,
   "http://localhost:3000",
-].filter((origin): origin is string => Boolean(origin));
+  "http://localhost:5173",
+]);
+
+function isAllowedOrigin(origin: string): boolean {
+  if (allowedOrigins.has(origin)) {
+    return true;
+  }
+
+  try {
+    const { hostname, protocol } = new URL(origin);
+    return protocol === "https:" && hostname.endsWith(".vercel.app");
+  } catch {
+    return false;
+  }
+}
 
 app.use(
   cors({
-    origin: allowedOrigins,
+    origin(origin, callback) {
+      if (!origin || isAllowedOrigin(origin)) {
+        callback(null, true);
+        return;
+      }
+
+      callback(new Error(`Origin not allowed by CORS: ${origin}`));
+    },
     credentials: true,
   }),
 );
@@ -66,16 +87,13 @@ app.use(requestSanitizer);
 app.use(apiRateLimiter);
 
 app.get("/", (_req, res) => {
-  if (env.FRONTEND_URL) {
-    res.redirect(env.FRONTEND_URL);
-    return;
-  }
-
   res.status(200).json({
     service: "dev-debugger-api",
     status: "ok",
     message: "API server is running.",
     docs: {
+      rootHealth: "/health",
+      rootVersion: "/version",
       health: "/api/health",
       version: "/api/version",
     },

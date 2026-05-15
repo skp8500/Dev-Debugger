@@ -1,5 +1,14 @@
 import { z } from "zod";
 
+function parseFrontendOrigins(value: string | undefined): string[] {
+  if (!value) return [];
+
+  return value
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+}
+
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
   PORT: z.coerce.number().int().positive().default(3000),
@@ -26,7 +35,11 @@ const envSchema = z.object({
     .string()
     .optional()
     .transform((value: string | undefined) => value === "true"),
-  FRONTEND_URL: z.string().url().optional(),
+  FRONTEND_URL: z
+    .string()
+    .optional()
+    .transform((value) => parseFrontendOrigins(value))
+    .pipe(z.array(z.string().url()).default([])),
   LOG_LEVEL: z.string().optional(),
   RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(15 * 60 * 1000),
   RATE_LIMIT_MAX: z.coerce.number().int().positive().default(100),
