@@ -152,7 +152,25 @@ export default function Landing() {
       </main>
 
       <footer className="border-t border-border/50 px-4 md:px-8 py-6 text-center text-xs text-muted-foreground">
-        © {new Date().getFullYear()} Smart Dev Debugger
+        <div className="flex flex-col items-center justify-center gap-2 sm:flex-row sm:gap-4">
+          <span>© {new Date().getFullYear()} Smart Dev Debugger</span>
+          <span className="hidden sm:inline">•</span>
+          <span>
+            Built by{" "}
+            <a
+              href="https://github.com/skp8500"
+              target="_blank"
+              rel="noreferrer"
+              className="font-medium text-foreground hover:text-primary"
+            >
+              skp8500
+            </a>
+          </span>
+          <span className="hidden sm:inline">•</span>
+          <Link href="/status" className="font-medium text-foreground hover:text-primary">
+            Status
+          </Link>
+        </div>
       </footer>
     </div>
   );
