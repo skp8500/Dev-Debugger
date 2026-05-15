@@ -36,15 +36,17 @@ function formatStatusLabel(
 
 export default function Backend() {
   const backend = useBackend();
+  const frontendOrigin =
+    typeof window !== "undefined" ? window.location.origin : "Current frontend";
 
   return (
     <div className="flex-1 overflow-y-auto bg-muted/10 p-6 md:p-8">
       <div className="mx-auto max-w-5xl space-y-6">
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Backend Status</h1>
+            <h1 className="text-3xl font-bold tracking-tight">System Status</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Verify which backend is active and whether failover is currently enabled.
+              Live health view for the frontend and connected backend services.
             </p>
           </div>
           <Button
@@ -68,10 +70,10 @@ export default function Backend() {
                 ) : (
                   <ServerCog className="h-5 w-5 text-primary" />
                 )}
-                Runtime
+                API Runtime
               </CardTitle>
               <CardDescription>
-                Current backend selection and failover state.
+                Current backend selection and request routing state.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3 text-sm">
@@ -106,22 +108,32 @@ export default function Backend() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Request Settings</CardTitle>
-              <CardDescription>Frontend failover runtime values.</CardDescription>
+              <CardTitle>Frontend</CardTitle>
+              <CardDescription>Current app availability and runtime details.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3 text-sm">
               <div className="flex items-center justify-between rounded-lg border bg-background px-4 py-3">
-                <span className="text-muted-foreground">Timeout</span>
-                <span className="font-medium">{backend.requestTimeoutMs} ms</span>
+                <span className="text-muted-foreground">Status</span>
+                <Badge variant="outline" className={getHealthTone("healthy")}>
+                  Up
+                </Badge>
               </div>
               <div className="flex items-center justify-between rounded-lg border bg-background px-4 py-3">
-                <span className="text-muted-foreground">Retry count</span>
-                <span className="font-medium">{backend.retryCount}</span>
+                <span className="text-muted-foreground">Origin</span>
+                <span className="max-w-[9rem] truncate text-xs font-medium">
+                  {frontendOrigin}
+                </span>
               </div>
               <div className="flex items-center justify-between rounded-lg border bg-background px-4 py-3">
                 <span className="text-muted-foreground">Last request ID</span>
                 <span className="max-w-[9rem] truncate font-mono text-xs">
                   {backend.lastRequestId ?? "n/a"}
+                </span>
+              </div>
+              <div className="flex items-center justify-between rounded-lg border bg-background px-4 py-3">
+                <span className="text-muted-foreground">Timeout / Retries</span>
+                <span className="text-xs font-medium">
+                  {backend.requestTimeoutMs} ms / {backend.retryCount}
                 </span>
               </div>
             </CardContent>
@@ -130,9 +142,9 @@ export default function Backend() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Configured Backends</CardTitle>
+            <CardTitle>Backend Services</CardTitle>
             <CardDescription>
-              Health and endpoint details for each configured backend.
+              Health and endpoint details for each connected backend.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">

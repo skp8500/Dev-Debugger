@@ -72,6 +72,11 @@ function Router() {
           </Layout>
         </RouteGuard>
       </Route>
+      <Route path="/status">
+        <Layout>
+          <Backend />
+        </Layout>
+      </Route>
       <Route>
         <NotFound />
       </Route>
