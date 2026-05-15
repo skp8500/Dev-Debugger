@@ -268,13 +268,21 @@ router.get("/auth/google/callback", async (req, res): Promise<void> => {
 
     const normalizedEmail = profile.email.trim().toLowerCase();
 
-    const [existing] = await db
+    const [existingByGoogleId] = await db
       .select()
       .from(usersTable)
-      .where(eq(usersTable.email, normalizedEmail))
+      .where(eq(usersTable.googleId, profile.sub))
       .limit(1);
 
-    let user = existing;
+    const [existingByEmail] = existingByGoogleId
+      ? [existingByGoogleId]
+      : await db
+          .select()
+          .from(usersTable)
+          .where(eq(usersTable.email, normalizedEmail))
+          .limit(1);
+
+    let user = existingByGoogleId ?? existingByEmail;
     if (!user) {
       const [created] = await db
         .insert(usersTable)

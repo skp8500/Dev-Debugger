@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Terminal, AlertCircle, Loader2 } from "lucide-react";
 import { ApiError } from "@workspace/api-client-react";
-import { getApiUrl } from "@/lib/api";
+import { getPrimaryApiUrl } from "@/lib/api";
 
 const GOOGLE_BASE_PATH = "/api/auth/google";
 
@@ -98,7 +98,7 @@ export default function Login() {
             variant="outline"
             className="w-full gap-2"
             onClick={() => {
-              window.location.href = getApiUrl(GOOGLE_BASE_PATH);
+              window.location.href = getPrimaryApiUrl(GOOGLE_BASE_PATH);
             }}
             data-testid="button-google-login"
           >

@@ -46,6 +46,15 @@ export function initializeApiLayer(): void {
   });
 }
 
+export function getPrimaryApiUrl(path: string): string {
+  const primaryBackend = getConfiguredBackends()[0];
+  if (!path.startsWith("/")) {
+    return path;
+  }
+
+  return primaryBackend ? `${primaryBackend.baseUrl}${path}` : getApiUrl(path);
+}
+
 export async function apiFetch<T = unknown>(
   endpoint: string,
   options: CustomFetchOptions = {},
