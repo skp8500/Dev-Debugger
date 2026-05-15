@@ -47,11 +47,11 @@ export function initializeApiLayer(): void {
 }
 
 export function getPrimaryApiUrl(path: string): string {
-  const primaryBackend = getConfiguredBackends()[0];
   if (!path.startsWith("/")) {
     return path;
   }
 
+  const primaryBackend = getConfiguredBackends()[0];
   return primaryBackend ? `${primaryBackend.baseUrl}${path}` : getApiUrl(path);
 }
 
