@@ -23,9 +23,9 @@ RUN addgroup -S app && adduser -S app -G app
 WORKDIR /app
 
 COPY --from=build --chown=app:app /app/node_modules/.pnpm ./node_modules/.pnpm
-COPY --from=build --chown=app:app /app/artifacts/api-server/node_modules ./node_modules
-COPY --from=build --chown=app:app /app/artifacts/api-server/dist ./dist
-COPY --from=build --chown=app:app /app/artifacts/api-server/package.json ./
+COPY --from=build --chown=app:app /app/artifacts/api-server ./artifacts/api-server
+
+WORKDIR /app/artifacts/api-server
 
 USER app
 
