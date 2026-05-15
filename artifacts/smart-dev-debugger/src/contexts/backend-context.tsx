@@ -11,7 +11,6 @@ import {
   getApiRuntimeSnapshot,
   initializeApiLayer,
   probeBackendHealth,
-  setActiveBackend,
   subscribeToApiRuntime,
   type ApiBackendDefinition,
   type ApiRuntimeSnapshot,
@@ -45,29 +44,11 @@ export function BackendProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    const results = await Promise.all(
+    await Promise.all(
       current.backends.map((backend: ApiBackendDefinition) =>
         probeBackendHealth(backend.name),
       ),
     );
-
-    const activeBackend = current.activeBackend;
-    const activeResult = activeBackend
-      ? results.find(
-          (result: { backend: string }) => result.backend === activeBackend,
-        )
-      : null;
-    const healthyPrimary = results[0]?.ok ?? false;
-    const healthyBackup = results[1]?.ok ?? false;
-
-    if (activeResult && !activeResult.ok && healthyBackup) {
-      setActiveBackend(results[1]!.backend);
-      return;
-    }
-
-    if (!current.fallbackMode && !healthyPrimary && healthyBackup) {
-      setActiveBackend(results[1]!.backend);
-    }
   }, []);
 
   useEffect(() => {
