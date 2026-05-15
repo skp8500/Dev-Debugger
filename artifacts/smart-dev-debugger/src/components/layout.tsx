@@ -9,7 +9,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const { theme, setTheme } = useTheme();
   const [location] = useLocation();
   const isHistory = location.startsWith("/history");
-  const isBackend = location.startsWith("/backend");
+  const isStatus = location.startsWith("/status") || location.startsWith("/backend");
 
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground">
@@ -31,13 +31,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
             History
           </Link>
           <Link
-            href="/backend"
+            href="/status"
             className={`text-sm font-medium transition-colors ${
-              isBackend ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+              isStatus ? "text-foreground" : "text-muted-foreground hover:text-foreground"
             }`}
-            data-testid="link-backend"
+            data-testid="link-status"
           >
-            Backend
+            Status
           </Link>
           <Button
             variant="ghost"
