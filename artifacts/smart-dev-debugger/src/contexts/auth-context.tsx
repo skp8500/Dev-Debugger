@@ -21,10 +21,35 @@ type AuthState = {
 
 const AuthContext = createContext<AuthState | null>(null);
 
+function normalizeUser(user: PublicUser): PublicUser {
+  const safeEmail =
+    typeof user.email === "string" ? user.email.trim().toLowerCase() : "";
+  const safeFullName =
+    typeof user.fullName === "string" && user.fullName.trim().length > 0
+      ? user.fullName.trim()
+      : safeEmail || "Signed in user";
+  const safeCredits =
+    typeof user.credits === "number" && Number.isFinite(user.credits)
+      ? user.credits
+      : 100;
+
+  return {
+    ...user,
+    fullName: safeFullName,
+    email: safeEmail,
+    credits: safeCredits,
+    avatarUrl: user.avatarUrl ?? null,
+  };
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
-  const [user, setUser] = useState<PublicUser | null>(null);
+  const [user, setUserState] = useState<PublicUser | null>(null);
   const [status, setStatus] = useState<AuthState["status"]>("loading");
+
+  const setUser = useCallback((nextUser: PublicUser | null) => {
+    setUserState(nextUser ? normalizeUser(nextUser) : null);
+  }, []);
 
   const refresh = useCallback(async () => {
     try {
