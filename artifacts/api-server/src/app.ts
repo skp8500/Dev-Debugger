@@ -86,6 +86,40 @@ app.get("/ping", (_req, res) => {
   res.status(200).send("OK");
 });
 
+app.get("/health", (_req, res) => {
+  res.status(200).json({
+    status: "ok",
+    platform: env.PLATFORM,
+    uptime: process.uptime(),
+    timestamp: Date.now(),
+  });
+});
+
+app.get("/version", (_req, res) => {
+  res.status(200).json({
+    platform: env.PLATFORM,
+    version: process.env.npm_package_version ?? "0.0.0",
+    commit:
+      process.env.COMMIT_SHA ??
+      process.env.RENDER_GIT_COMMIT ??
+      process.env.RAILWAY_GIT_COMMIT_SHA ??
+      "unknown",
+  });
+});
+
+app.get("/api", (_req, res) => {
+  res.status(200).json({
+    service: "dev-debugger-api",
+    status: "ok",
+    routes: {
+      health: "/health",
+      version: "/version",
+      apiHealth: "/api/health",
+      apiVersion: "/api/version",
+    },
+  });
+});
+
 app.use("/api", router);
 app.use(notFoundHandler);
 app.use(errorHandler);
