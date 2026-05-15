@@ -13,6 +13,7 @@ import Login from "@/pages/login";
 import Register from "@/pages/register";
 import Home from "@/pages/home";
 import History from "@/pages/history";
+import Backend from "@/pages/backend";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -61,6 +62,13 @@ function Router() {
         <RouteGuard mode="protected">
           <Layout>
             <History />
+          </Layout>
+        </RouteGuard>
+      </Route>
+      <Route path="/backend">
+        <RouteGuard mode="protected">
+          <Layout>
+            <Backend />
           </Layout>
         </RouteGuard>
       </Route>
