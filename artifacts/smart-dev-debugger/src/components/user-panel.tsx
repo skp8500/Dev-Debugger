@@ -57,9 +57,15 @@ export function UserPanel() {
   if (!user) return null;
 
   const initials = getInitials(user.fullName ?? user.email);
-  const credits = Math.max(0, user.credits);
+  const creditsValue =
+    typeof user.credits === "number" && Number.isFinite(user.credits)
+      ? user.credits
+      : 0;
+  const credits = Math.max(0, creditsValue);
   const colors = getCreditColor(credits);
   const pct = Math.min(100, (credits / MAX_CREDITS) * 100);
+  const displayName = user.fullName?.trim() || user.email?.trim() || "Signed in user";
+  const displayEmail = user.email?.trim() || "No email available";
 
   const handleLogout = async () => {
     setConfirmOpen(false);
@@ -87,7 +93,7 @@ export function UserPanel() {
                   {user.avatarUrl ? (
                     <img
                       src={user.avatarUrl}
-                      alt={user.fullName}
+                      alt={displayName}
                       className="w-12 h-12 rounded-full object-cover ring-2 ring-primary/20"
                     />
                   ) : (
@@ -98,11 +104,11 @@ export function UserPanel() {
                   <div className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full ring-2 ring-card ${colors.dot}`} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="font-semibold text-sm truncate" title={user.fullName ?? user.email ?? ""}>
-                    {user.fullName ?? user.email ?? ""}
+                    <div className="font-semibold text-sm truncate" title={displayName}>
+                    {displayName}
                   </div>
-                  <div className="text-xs text-muted-foreground truncate" title={user.email}>
-                    {user.email}
+                  <div className="text-xs text-muted-foreground truncate" title={displayEmail}>
+                    {displayEmail}
                   </div>
                 </div>
                 <button
@@ -163,7 +169,7 @@ export function UserPanel() {
               {user.avatarUrl ? (
                 <img
                   src={user.avatarUrl}
-                  alt={user.fullName}
+                  alt={displayName}
                   className="w-12 h-12 rounded-full object-cover"
                 />
               ) : (

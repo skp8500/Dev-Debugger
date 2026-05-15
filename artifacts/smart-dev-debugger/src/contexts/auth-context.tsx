@@ -31,6 +31,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const me = await getCurrentUser();
       setUser(me);
       setStatus("authenticated");
+      await queryClient.invalidateQueries();
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
         setUser(null);
@@ -40,7 +41,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setStatus("unauthenticated");
       }
     }
-  }, []);
+  }, [queryClient]);
 
   useEffect(() => {
     void refresh();
