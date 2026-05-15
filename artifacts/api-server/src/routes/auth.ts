@@ -9,6 +9,7 @@ import {
   signToken,
   verifyPassword,
 } from "../services/auth";
+import { env } from "../config/env";
 
 const router: IRouter = Router();
 
