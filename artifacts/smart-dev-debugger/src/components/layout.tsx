@@ -3,13 +3,13 @@ import { Link, useLocation } from "wouter";
 import { useTheme } from "./theme-provider";
 import { Terminal, Moon, Sun } from "lucide-react";
 import { Button } from "./ui/button";
-import { BackendBanner } from "./backend-banner";
 import { UserPanel } from "./user-panel";
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const { theme, setTheme } = useTheme();
   const [location] = useLocation();
   const isHistory = location.startsWith("/history");
+  const isBackend = location.startsWith("/backend");
 
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground">
@@ -30,6 +30,15 @@ export function Layout({ children }: { children: React.ReactNode }) {
           >
             History
           </Link>
+          <Link
+            href="/backend"
+            className={`text-sm font-medium transition-colors ${
+              isBackend ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+            }`}
+            data-testid="link-backend"
+          >
+            Backend
+          </Link>
           <Button
             variant="ghost"
             size="icon"
@@ -46,7 +55,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </Button>
         </div>
       </header>
-      <BackendBanner />
       <main className="flex-1 flex overflow-hidden">{children}</main>
       <UserPanel />
     </div>

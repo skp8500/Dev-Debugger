@@ -9,6 +9,7 @@ import {
   signToken,
   verifyPassword,
 } from "../services/auth";
+import { env } from "../config/env";
 
 const router: IRouter = Router();
 
@@ -176,6 +177,15 @@ type HttpFetchResponse = {
   json(): Promise<unknown>;
 };
 
+function getFrontendRedirect(path: string): string {
+  const frontendBaseUrl = env.FRONTEND_URL[0];
+  if (!frontendBaseUrl) {
+    return path;
+  }
+
+  return `${frontendBaseUrl.replace(/\/+$/, "")}${path}`;
+}
+
 function getCallbackUrl(req: import("express").Request): string {
   const proto = req.headers["x-forwarded-proto"]?.toString().split(",")[0] || req.protocol;
   const host = req.headers["x-forwarded-host"]?.toString() || req.get("host");
@@ -184,7 +194,7 @@ function getCallbackUrl(req: import("express").Request): string {
 
 router.get("/auth/google", (req, res): void => {
   if (!GOOGLE_OAUTH_ENABLED) {
-    res.redirect("/login?error=google_not_configured");
+    res.redirect(getFrontendRedirect("/login?error=google_not_configured"));
     return;
   }
 
@@ -202,13 +212,13 @@ router.get("/auth/google", (req, res): void => {
 
 router.get("/auth/google/callback", async (req, res): Promise<void> => {
   if (!GOOGLE_OAUTH_ENABLED) {
-    res.redirect("/login?error=google_not_configured");
+    res.redirect(getFrontendRedirect("/login?error=google_not_configured"));
     return;
   }
 
   const code = req.query.code;
   if (typeof code !== "string") {
-    res.redirect("/login?error=google_oauth_failed");
+    res.redirect(getFrontendRedirect("/login?error=google_oauth_failed"));
     return;
   }
 
@@ -230,13 +240,13 @@ router.get("/auth/google/callback", async (req, res): Promise<void> => {
         { status: tokenResp.status },
         "Google token exchange failed",
       );
-      res.redirect("/login?error=google_oauth_failed");
+      res.redirect(getFrontendRedirect("/login?error=google_oauth_failed"));
       return;
     }
 
     const tokenData = (await tokenResp.json()) as { access_token?: string };
     if (!tokenData.access_token) {
-      res.redirect("/login?error=google_oauth_failed");
+      res.redirect(getFrontendRedirect("/login?error=google_oauth_failed"));
       return;
     }
 
@@ -245,7 +255,7 @@ router.get("/auth/google/callback", async (req, res): Promise<void> => {
       { headers: { authorization: `Bearer ${tokenData.access_token}` } },
     )) as HttpFetchResponse;
     if (!profileResp.ok) {
-      res.redirect("/login?error=google_oauth_failed");
+      res.redirect(getFrontendRedirect("/login?error=google_oauth_failed"));
       return;
     }
 
@@ -258,13 +268,21 @@ router.get("/auth/google/callback", async (req, res): Promise<void> => {
 
     const normalizedEmail = profile.email.trim().toLowerCase();
 
-    const [existing] = await db
+    const [existingByGoogleId] = await db
       .select()
       .from(usersTable)
-      .where(eq(usersTable.email, normalizedEmail))
+      .where(eq(usersTable.googleId, profile.sub))
       .limit(1);
 
-    let user = existing;
+    const [existingByEmail] = existingByGoogleId
+      ? [existingByGoogleId]
+      : await db
+          .select()
+          .from(usersTable)
+          .where(eq(usersTable.email, normalizedEmail))
+          .limit(1);
+
+    let user = existingByGoogleId ?? existingByEmail;
     if (!user) {
       const [created] = await db
         .insert(usersTable)
@@ -288,10 +306,10 @@ router.get("/auth/google/callback", async (req, res): Promise<void> => {
     const token = signToken({ userId: user.id });
     res.cookie(COOKIE_NAME, token, getCookieOptions());
 
-    res.redirect("/dashboard");
+    res.redirect(getFrontendRedirect("/dashboard"));
   } catch (err) {
     req.log.error({ err }, "Google OAuth callback failed");
-    res.redirect("/login?error=google_oauth_failed");
+    res.redirect(getFrontendRedirect("/login?error=google_oauth_failed"));
   }
 });
 

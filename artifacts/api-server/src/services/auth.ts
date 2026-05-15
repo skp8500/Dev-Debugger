@@ -39,10 +39,12 @@ export function verifyToken(token: string): JwtPayload | null {
 }
 
 export function getCookieOptions(): CookieOptions {
+  const isProduction = env.NODE_ENV === "production";
+
   return {
     httpOnly: true,
-    sameSite: "lax",
-    secure: env.NODE_ENV === "production",
+    sameSite: isProduction ? "none" : "lax",
+    secure: isProduction,
     maxAge: TOKEN_EXPIRY_MS,
     path: "/",
   };

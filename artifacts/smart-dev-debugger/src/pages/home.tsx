@@ -99,7 +99,7 @@ function getAnalysisErrorMessage(error: unknown): string {
 export default function Home() {
   const [location, setLocation] = useLocation();
   const queryClient = useQueryClient();
-  const { user, setUser } = useAuth();
+  const { user, setUser, status } = useAuth();
   const [code, setCode] = useState("");
   const [errorText, setErrorText] = useState("");
   const [language, setLanguage] = useState<AnalyzeRequestLanguage>(AnalyzeRequestLanguage.python);
@@ -188,7 +188,15 @@ export default function Home() {
       },
     },
   });
-  const { data: historyData } = useListHistory({ limit: 10 });
+  const { data: historyData } = useListHistory(
+    { limit: 10 },
+    {
+      query: {
+        enabled: status === "authenticated",
+        refetchOnMount: "always",
+      },
+    },
+  );
   const { data: sessionData, isFetching: isSessionFetching } = useGetSession(activeSessionId || "", { query: { enabled: !!activeSessionId } });
 
   const activeResult = analyzeMutation.data ?? sessionData;
