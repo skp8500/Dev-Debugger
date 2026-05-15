@@ -46,14 +46,35 @@ app.use(
   }),
 );
 
-const allowedOrigins = [
-  env.FRONTEND_URL,
+const allowedOrigins = new Set([
+  ...env.FRONTEND_URL,
   "http://localhost:3000",
-].filter((origin): origin is string => Boolean(origin));
+  "http://localhost:5173",
+]);
+
+function isAllowedOrigin(origin: string): boolean {
+  if (allowedOrigins.has(origin)) {
+    return true;
+  }
+
+  try {
+    const { hostname, protocol } = new URL(origin);
+    return protocol === "https:" && hostname.endsWith(".vercel.app");
+  } catch {
+    return false;
+  }
+}
 
 app.use(
   cors({
-    origin: allowedOrigins,
+    origin(origin, callback) {
+      if (!origin || isAllowedOrigin(origin)) {
+        callback(null, true);
+        return;
+      }
+
+      callback(new Error(`Origin not allowed by CORS: ${origin}`));
+    },
     credentials: true,
   }),
 );
@@ -65,8 +86,56 @@ app.use(express.urlencoded({ extended: true }));
 app.use(requestSanitizer);
 app.use(apiRateLimiter);
 
+app.get("/", (_req, res) => {
+  res.status(200).json({
+    service: "dev-debugger-api",
+    status: "ok",
+    message: "API server is running.",
+    docs: {
+      rootHealth: "/health",
+      rootVersion: "/version",
+      health: "/api/health",
+      version: "/api/version",
+    },
+  });
+});
+
 app.get("/ping", (_req, res) => {
   res.status(200).send("OK");
+});
+
+app.get("/health", (_req, res) => {
+  res.status(200).json({
+    status: "ok",
+    platform: env.PLATFORM,
+    uptime: process.uptime(),
+    timestamp: Date.now(),
+  });
+});
+
+app.get("/version", (_req, res) => {
+  res.status(200).json({
+    platform: env.PLATFORM,
+    version: process.env.npm_package_version ?? "0.0.0",
+    commit:
+      process.env.COMMIT_SHA ??
+      process.env.RENDER_GIT_COMMIT ??
+      process.env.RAILWAY_GIT_COMMIT_SHA ??
+      "unknown",
+  });
+});
+
+app.get("/api", (_req, res) => {
+  res.status(200).json({
+    service: "dev-debugger-api",
+    status: "ok",
+    routes: {
+      health: "/health",
+      version: "/version",
+      apiHealth: "/api/health",
+      apiVersion: "/api/version",
+    },
+  });
 });
 
 app.use("/api", router);

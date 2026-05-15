@@ -148,8 +148,7 @@ export function setActiveBackend(name: string): void {
   _activeBackendIndex = nextIndex;
   syncRuntimeSnapshot({
     wakingUp: false,
-    statusMessage:
-      nextIndex > 0 ? "Primary server unavailable. Switched to backup server." : null,
+    statusMessage: nextIndex > 0 ? "Backup backend selected manually." : null,
   });
 }
 
@@ -664,7 +663,7 @@ export async function customFetch<T = unknown>(
     syncRuntimeSnapshot({
       wakingUp: false,
       statusMessage: _runtimeSnapshot.fallbackMode
-        ? "Primary server unavailable. Switched to backup server."
+        ? "Backup backend selected manually."
         : null,
       lastRequestId: requestId,
     });
@@ -692,7 +691,7 @@ export async function customFetch<T = unknown>(
       syncRuntimeSnapshot({
         wakingUp: false,
         statusMessage: _runtimeSnapshot.fallbackMode
-          ? "Primary server unavailable. Switched to backup server."
+          ? "Backup backend selected manually."
           : null,
         lastError: null,
       });
@@ -704,7 +703,6 @@ export async function customFetch<T = unknown>(
 
       if (_backends.length > 1 && _activeBackendIndex === 0) {
         markPrimaryWaking(error);
-        setActiveBackend(_backends[1]!.name);
       }
 
       if (attempt < _retryCount && shouldRetry(method, error)) {

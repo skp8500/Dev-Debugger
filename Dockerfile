@@ -1,7 +1,7 @@
 # ── Stage 1: Install dependencies ────────────────────────────
 FROM node:22-alpine AS deps
 
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN corepack enable && corepack prepare pnpm@10.33.2 --activate
 
 WORKDIR /app
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
@@ -22,8 +22,10 @@ FROM node:22-alpine AS runtime
 RUN addgroup -S app && adduser -S app -G app
 WORKDIR /app
 
-COPY --from=build --chown=app:app /app/artifacts/api-server/dist ./dist
-COPY --from=build --chown=app:app /app/artifacts/api-server/package.json ./
+COPY --from=build --chown=app:app /app/node_modules/.pnpm ./node_modules/.pnpm
+COPY --from=build --chown=app:app /app/artifacts/api-server ./artifacts/api-server
+
+WORKDIR /app/artifacts/api-server
 
 USER app
 
