@@ -52,7 +52,7 @@ export function getPrimaryApiUrl(path: string): string {
   }
 
   const primaryBackend = getConfiguredBackends()[0];
-  return primaryBackend ? `${primaryBackend.baseUrl}${path}` : getApiUrl(path);
+  return primaryBackend ? `${primaryBackend.baseUrl.replace(/\/$/, "")}${path}` : getApiUrl(path);
 }
 
 export async function apiFetch<T = unknown>(
