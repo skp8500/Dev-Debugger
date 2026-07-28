@@ -10,7 +10,7 @@ AI-powered debugging workspace for developers who want faster answers than raw s
 
 ## Preview / Demo
 
-![Preview](artifacts/smart-dev-debugger/public/opengraph.jpg)
+![Preview](artifacts/smart-dev-debugger/public/Dev-Bugger-Prev-2.png)
 
 Core flow:
 
